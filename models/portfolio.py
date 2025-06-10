@@ -50,8 +50,12 @@ class PortfolioManager:
                 portfolio[scrip].quantity -= quantity
                 
             elif trans_type == 'BONUS':
-                # For BONUS transactions, add quantity without affecting average price
-                portfolio[scrip].quantity += quantity
+                # For BONUS transactions, add quantity and recalculate average price
+                current_total = portfolio[scrip].quantity * portfolio[scrip].average_price
+                new_quantity = portfolio[scrip].quantity + quantity
+                # Since bonus shares are issued at zero cost, the average price should be reduced
+                portfolio[scrip].average_price = current_total / new_quantity
+                portfolio[scrip].quantity = new_quantity
 
             # Update total value
             portfolio[scrip].total_value = portfolio[scrip].quantity * portfolio[scrip].average_price

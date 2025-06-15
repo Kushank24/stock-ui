@@ -37,7 +37,7 @@ class Charges:
             
             conn.commit()
 
-    def render(self):
+    def render(self, demat_account_id: int):
         st.title("Transaction Charges")
         
         # Create tabs for Equity and F&O charges

@@ -12,7 +12,7 @@ class TransactionForm:
         self.portfolio_manager = PortfolioManager(db_manager)
         self.charges = Charges(db_manager)
 
-    def render(self):
+    def render(self, demat_account_id: int):
         st.title("Add New Transaction")
         
         # Initialize session state for form data if not exists
@@ -87,7 +87,8 @@ class TransactionForm:
                     transaction_type=transaction_type,
                     num_shares=num_shares,
                     rate=rate,
-                    amount=total_amount  # Store the total amount including charges
+                    amount=total_amount,  # Store the total amount including charges
+                    demat_account_id=demat_account_id
                 )
                 
                 if success:

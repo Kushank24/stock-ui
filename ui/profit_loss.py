@@ -8,12 +8,16 @@ class ProfitLoss:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def render(self):
+    def render(self, demat_account_id: int):
         st.title("Profit & Loss Statement")
         
         # Get all transactions
         with sqlite3.connect(self.db_manager.db_name, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
-            transactions_df = pd.read_sql_query("SELECT * FROM transactions ORDER BY date", conn)
+            transactions_df = pd.read_sql_query(
+                "SELECT * FROM transactions WHERE demat_account_id = ? ORDER BY date",
+                conn,
+                params=(demat_account_id,)
+            )
         
         if transactions_df.empty:
             st.info("No transactions found")

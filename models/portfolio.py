@@ -16,13 +16,17 @@ class PortfolioManager:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def calculate_portfolio(self) -> List[PortfolioItem]:
+    def calculate_portfolio(self, demat_account_id: int) -> List[PortfolioItem]:
         with sqlite3.connect(self.db_manager.db_name) as conn:
             # Configure date adapter for SQLite
             sqlite3.register_adapter(datetime, lambda x: x.isoformat())
             sqlite3.register_converter("DATE", lambda x: datetime.fromisoformat(x.decode()))
             
-            df = pd.read_sql_query("SELECT * FROM transactions ORDER BY date", conn)
+            df = pd.read_sql_query(
+                "SELECT * FROM transactions WHERE demat_account_id = ? ORDER BY date",
+                conn,
+                params=(demat_account_id,)
+            )
 
         portfolio: Dict[str, PortfolioItem] = {}
 

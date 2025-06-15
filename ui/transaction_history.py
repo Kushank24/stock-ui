@@ -8,9 +8,9 @@ class TransactionHistory:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def render(self):
+    def render(self, demat_account_id: int):
         st.title("Transaction History")
-        df = self.get_transactions()
+        df = self.get_transactions(demat_account_id)
         if not df.empty:
             # Add filters
             st.subheader("Filters")
@@ -132,6 +132,10 @@ class TransactionHistory:
         else:
             st.info("No transactions found")
 
-    def get_transactions(self):
+    def get_transactions(self, demat_account_id: int):
         with sqlite3.connect(self.db_manager.db_name) as conn:
-            return pd.read_sql_query("SELECT * FROM transactions ORDER BY date DESC", conn)
+            return pd.read_sql_query(
+                "SELECT * FROM transactions WHERE demat_account_id = ? ORDER BY date DESC",
+                conn,
+                params=(demat_account_id,)
+            )

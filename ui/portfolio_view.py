@@ -6,9 +6,9 @@ class PortfolioView:
     def __init__(self, portfolio_manager: PortfolioManager):
         self.portfolio_manager = portfolio_manager
 
-    def render(self):
+    def render(self, demat_account_id: int):
         st.title("Current Portfolio")
-        portfolio_items = self.portfolio_manager.calculate_portfolio()
+        portfolio_items = self.portfolio_manager.calculate_portfolio(demat_account_id)
 
         if portfolio_items:
             total_portfolio_value = sum(item.total_value for item in portfolio_items)

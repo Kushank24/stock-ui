@@ -45,15 +45,20 @@ git clone https://github.com/yourusername/stock-ui.git
 cd stock-ui
 ```
 
-2. Create and activate a virtual environment:
+2. Install uv (if not already installed):
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+3. Create and activate a virtual environment:
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
-3. Install dependencies:
+4. Install dependencies using uv:
 ```bash
-pip install -r requirements.txt
+uv pip install -r pyproject.toml
 ```
 
 ## Usage
@@ -88,7 +93,8 @@ stock-ui/
 ├── models/             # Database models
 │   └── database.py     # Database management
 ├── stock_transactions.db  # SQLite database
-└── requirements.txt    # Project dependencies
+├── pyproject.toml      # Project dependencies and metadata
+└── uv.lock            # Lock file for dependency versions
 ```
 
 ## Contributing
@@ -108,3 +114,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Built with [Streamlit](https://streamlit.io/)
 - Uses [SQLite](https://www.sqlite.org/) for data storage
 - [Pandas](https://pandas.pydata.org/) for data manipulation
+- [uv](https://github.com/astral-sh/uv) for dependency management

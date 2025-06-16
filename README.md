@@ -12,7 +12,19 @@ A comprehensive stock transaction management system built with Python and Stream
 - Consolidated portfolio view across all accounts
 - Individual charge configuration per account
 
-### 2. Transaction Management
+### 2. Broker Integration
+- Support for broker API integration for automated trade synchronization
+- Compatible with broker APIs that follow standard protocols
+- Example: Kotak Securities API integration support
+  - Automatic trade synchronization
+  - Real-time portfolio updates
+  - Historical trade data import
+  - Order placement capabilities
+  - [Kotak Securities API Documentation](https://documenter.getpostman.com/view/21534797/UzBnqmpD#753c18da-ce1c-421f-834d-1e88a4395dfe)
+- Manual transaction entry still available for brokers without API support
+- Flexible architecture to add support for more broker APIs
+
+### 3. Transaction Management
 - Record and track stock transactions (BUY, SELL, IPO, BONUS, RIGHT, BUYBACK, DEMERGER, MERGER)
 - Support for multiple exchanges (NSE, BSE, MCX, NCDEX)
 - Transaction history with detailed information
@@ -20,7 +32,7 @@ A comprehensive stock transaction management system built with Python and Stream
 - Transaction-specific charge calculation
 - Support for corporate actions (Bonus, Rights, Mergers, etc.)
 
-### 3. Charge Calculation
+### 4. Charge Calculation
 - Automatic calculation of various charges for different transaction types:
   - Brokerage
   - DP Charges
@@ -35,7 +47,7 @@ A comprehensive stock transaction management system built with Python and Stream
 - Real-time charge preview before transaction entry
 - Detailed charge breakdown for each transaction
 
-### 4. Category-wise Charge Management
+### 5. Category-wise Charge Management
 - **Equity Charges**
   - Configure charges for NSE and BSE
   - Support for both BUY and SELL transactions
@@ -53,7 +65,7 @@ A comprehensive stock transaction management system built with Python and Stream
   - CTT instead of STT for commodity transactions
   - Account-specific charge rates
 
-### 5. Portfolio Management
+### 6. Portfolio Management
 - Real-time portfolio tracking across all demat accounts
 - Consolidated view of holdings
 - Profit/Loss calculation

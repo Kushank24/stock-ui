@@ -86,15 +86,23 @@ The application uses SQLite as its database (`stock_transactions.db`). The datab
 
 ```
 stock-ui/
-├── main.py              # Main application entry point
-├── ui/                  # UI components
-│   ├── charges.py      # Charge management
-│   └── transaction_history.py  # Transaction history display
-├── models/             # Database models
-│   └── database.py     # Database management
-├── stock_transactions.db  # SQLite database
-├── pyproject.toml      # Project dependencies and metadata
-└── uv.lock            # Lock file for dependency versions
+├── main.py                    # Main application entry point
+├── ui/                        # UI components
+│   ├── __init__.py
+│   ├── charges.py            # Charge management and calculation
+│   ├── transaction_form.py   # Transaction entry form
+│   ├── transaction_history.py # Transaction history display
+│   ├── profit_loss.py        # Profit/Loss calculation and display
+│   └── portfolio_view.py     # Portfolio overview
+├── models/                    # Database and business logic
+│   ├── __init__.py
+│   ├── database.py           # Database management and operations
+│   └── portfolio.py          # Portfolio management logic
+├── stock_transactions.db      # SQLite database
+├── pyproject.toml            # Project dependencies and metadata
+├── uv.lock                   # Lock file for dependency versions
+├── .python-version           # Python version specification
+└── .gitignore               # Git ignore rules
 ```
 
 ## Contributing

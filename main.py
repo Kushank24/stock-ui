@@ -62,7 +62,9 @@ page = st.sidebar.radio(
         "Portfolio Overview",
         "Transaction Management",
         "Transaction History",
-        "Profit & Loss",
+        "Equity P&L",
+        "F&O Equity P&L",
+        "F&O Commodity P&L",
         "Charges"
     ]
 )
@@ -80,9 +82,15 @@ elif page == "Transaction Management":
     transaction_form.render(active_account["id"])
 elif page == "Transaction History":
     transaction_history.render(active_account["id"])
-elif page == "Profit & Loss":
+elif page == "Equity P&L":
     profit_loss = ProfitLoss(db_manager)
-    profit_loss.render(active_account["id"])
+    profit_loss.render(active_account["id"], "EQUITY")
+elif page == "F&O Equity P&L":
+    profit_loss = ProfitLoss(db_manager)
+    profit_loss.render(active_account["id"], "F&O EQUITY")
+elif page == "F&O Commodity P&L":
+    profit_loss = ProfitLoss(db_manager)
+    profit_loss.render(active_account["id"], "F&O COMMODITY")
 elif page == "Charges":
     charges = Charges(db_manager)
     charges.render(active_account["id"])

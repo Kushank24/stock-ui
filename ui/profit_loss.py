@@ -8,21 +8,27 @@ class ProfitLoss:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    def render(self, demat_account_id: int):
-        st.title("Profit & Loss Statement")
+    def render(self, demat_account_id: int, transaction_category: str):
+        st.title(f"{transaction_category} Profit & Loss Statement")
         
         # Get all transactions
         with sqlite3.connect(self.db_manager.db_name, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
             transactions_df = pd.read_sql_query(
-                "SELECT * FROM transactions WHERE demat_account_id = ? ORDER BY date",
+                "SELECT * FROM transactions WHERE demat_account_id = ? AND transaction_category = ? ORDER BY date",
                 conn,
-                params=(demat_account_id,)
+                params=(demat_account_id, transaction_category)
             )
         
         if transactions_df.empty:
             st.info("No transactions found")
             return
 
+        if transaction_category == "EQUITY":
+            self._render_equity_pnl(transactions_df)
+        else:
+            self._render_fno_pnl(transactions_df)
+
+    def _render_equity_pnl(self, transactions_df):
         # Filter only SELL transactions
         sell_transactions = transactions_df[transactions_df['transaction_type'] == 'SELL']
         
@@ -82,20 +88,116 @@ class ProfitLoss:
                 
                 remaining_sell_shares -= shares_to_match
 
-        # Create DataFrame for display
+        self._display_pnl_table(pnl_data)
+
+    def _render_fno_pnl(self, transactions_df):
+        # Group transactions by scrip, expiry, instrument type, and strike price
+        grouped_transactions = transactions_df.groupby(
+            ['scrip_name', 'expiry_date', 'instrument_type', 'strike_price']
+        )
+
+        pnl_data = []
+
+        for (scrip, expiry, instrument, strike), group in grouped_transactions:
+            # Sort by date
+            group = group.sort_values('date')
+            
+            # Calculate total buy and sell quantities and amounts
+            buy_transactions = group[group['transaction_type'] == 'BUY']
+            sell_transactions = group[group['transaction_type'] == 'SELL']
+            
+            total_buy_qty = buy_transactions['num_shares'].sum()
+            total_sell_qty = sell_transactions['num_shares'].sum()
+            
+            if total_buy_qty > 0 and total_sell_qty > 0:
+                # Calculate average buy and sell prices
+                avg_buy_price = (buy_transactions['rate'] * buy_transactions['num_shares']).sum() / total_buy_qty
+                avg_sell_price = (sell_transactions['rate'] * sell_transactions['num_shares']).sum() / total_sell_qty
+                
+                # Calculate profit/loss
+                profit_loss = (avg_sell_price - avg_buy_price) * min(total_buy_qty, total_sell_qty)
+                
+                pnl_data.append({
+                    'SCRIP': scrip,
+                    'EXPIRY': expiry,
+                    'INSTRUMENT': instrument,
+                    'STRIKE_PRICE': strike,
+                    'BUY_DATE': buy_transactions['date'].min(),
+                    'BUY_QTY': total_buy_qty,
+                    'BUY_PREMIUM': avg_buy_price,
+                    'BUY_TOTAL': avg_buy_price * total_buy_qty,
+                    'SELL_DATE': sell_transactions['date'].min(),
+                    'SELL_QTY': total_sell_qty,
+                    'SELL_PREMIUM': avg_sell_price,
+                    'SELL_TOTAL': avg_sell_price * total_sell_qty,
+                    'PROFIT_LOSS': profit_loss
+                })
+
         if pnl_data:
-            pnl_df = pd.DataFrame(pnl_data)
+            # Create DataFrame for display
+            display_df = pd.DataFrame(pnl_data)
             
-            # Format the display
-            display_df = pnl_df[[
-                'SCRIP', 'SALE_SHARES', 'SALE_DATE', 'SALE_PRICE',
-                'PURCHASE_SHARES', 'PURCHASE_DATE', 'PURCHASE_PRICE',
-                'PROFIT_LOSS', 'TERM_TYPE'
-            ]]
+            # Format numbers
+            numeric_columns = ['STRIKE_PRICE', 'BUY_PREMIUM', 'BUY_TOTAL', 'SELL_PREMIUM', 'SELL_TOTAL', 'PROFIT_LOSS']
+            for col in numeric_columns:
+                display_df[col] = display_df[col].round(2)
             
-            # Add serial numbers
-            display_df.index = range(1, len(display_df) + 1)
-            display_df.index.name = 'S. NO.'
+            # Style the DataFrame
+            def style_profit_loss(val):
+                if val > 0:
+                    return 'background-color: #90EE90'  # Light green
+                elif val < 0:
+                    return 'background-color: #FFB6C1'  # Light red
+                return ''
+
+            # Apply styling
+            styled_df = display_df.style.applymap(
+                style_profit_loss,
+                subset=['PROFIT_LOSS']
+            )
+            
+            # Display the table
+            st.dataframe(
+                styled_df,
+                use_container_width=True,
+                column_config={
+                    "STRIKE_PRICE": st.column_config.NumberColumn(
+                        "Strike Price",
+                        format="₹%.2f"
+                    ),
+                    "BUY_PREMIUM": st.column_config.NumberColumn(
+                        "Buy Premium",
+                        format="₹%.2f"
+                    ),
+                    "BUY_TOTAL": st.column_config.NumberColumn(
+                        "Buy Total",
+                        format="₹%.2f"
+                    ),
+                    "SELL_PREMIUM": st.column_config.NumberColumn(
+                        "Sell Premium",
+                        format="₹%.2f"
+                    ),
+                    "SELL_TOTAL": st.column_config.NumberColumn(
+                        "Sell Total",
+                        format="₹%.2f"
+                    ),
+                    "PROFIT_LOSS": st.column_config.NumberColumn(
+                        "Profit/Loss",
+                        format="₹%.2f"
+                    )
+                }
+            )
+            
+            # Show summary
+            total_profit = display_df['PROFIT_LOSS'].sum()
+            st.subheader(f"Total Profit/Loss: ₹{total_profit:,.2f}")
+        else:
+            st.info("No matching buy and sell transactions found")
+
+    def _display_pnl_table(self, pnl_data):
+        if pnl_data:
+            # Create DataFrame for display
+            display_df = pd.DataFrame(pnl_data)
             
             # Format numbers
             display_df['SALE_PRICE'] = display_df['SALE_PRICE'].round(2)
@@ -150,4 +252,4 @@ class ProfitLoss:
             total_profit = display_df['PROFIT_LOSS'].sum()
             st.subheader(f"Total Profit/Loss: ₹{total_profit:,.2f}")
         else:
-            st.info("No matching buy transactions found for sell transactions") 
+            st.info("No matching buy transactions found for sell transactions")

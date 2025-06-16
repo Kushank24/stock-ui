@@ -41,15 +41,45 @@ class DatabaseManager:
             transactions_exists = c.fetchone() is not None
             
             if transactions_exists:
-                # Check if demat_account_id column exists
+                # Check if new columns exist
                 c.execute("PRAGMA table_info(transactions)")
                 columns = [column[1] for column in c.fetchall()]
                 
-                if 'demat_account_id' not in columns:
-                    # Drop temporary table if it exists
-                    c.execute('DROP TABLE IF EXISTS transactions_new')
+                if 'demat_account_id' not in columns or 'transaction_category' not in columns or 'old_scrip_name' not in columns:
+                    # Create a default demat account if it doesn't exist
+                    c.execute('SELECT COUNT(*) FROM demat_accounts')
+                    if c.fetchone()[0] == 0:
+                        c.execute('''
+                            INSERT INTO demat_accounts (name, description)
+                            VALUES (?, ?)
+                        ''', ("Default Account", "Default demat account for existing transactions"))
+                        default_account_id = c.lastrowid
+                    else:
+                        c.execute('SELECT id FROM demat_accounts LIMIT 1')
+                        default_account_id = c.fetchone()[0]
                     
-                    # Create a temporary table with the new schema
+                    # Add new columns to existing table
+                    if 'demat_account_id' not in columns:
+                        c.execute('ALTER TABLE transactions ADD COLUMN demat_account_id INTEGER')
+                        c.execute('UPDATE transactions SET demat_account_id = ?', (default_account_id,))
+                    
+                    if 'transaction_category' not in columns:
+                        c.execute('ALTER TABLE transactions ADD COLUMN transaction_category TEXT')
+                        c.execute('UPDATE transactions SET transaction_category = ?', ('EQUITY',))
+                    
+                    if 'expiry_date' not in columns:
+                        c.execute('ALTER TABLE transactions ADD COLUMN expiry_date DATE')
+                    
+                    if 'instrument_type' not in columns:
+                        c.execute('ALTER TABLE transactions ADD COLUMN instrument_type TEXT')
+                    
+                    if 'strike_price' not in columns:
+                        c.execute('ALTER TABLE transactions ADD COLUMN strike_price REAL')
+                    
+                    if 'old_scrip_name' not in columns:
+                        c.execute('ALTER TABLE transactions ADD COLUMN old_scrip_name TEXT')
+                    
+                    # Add foreign key constraint
                     c.execute('''
                         CREATE TABLE transactions_new (
                             financial_year TEXT,
@@ -61,22 +91,20 @@ class DatabaseManager:
                             amount REAL,
                             transaction_type TEXT,
                             demat_account_id INTEGER,
+                            transaction_category TEXT,
+                            expiry_date DATE,
+                            instrument_type TEXT,
+                            strike_price REAL,
+                            old_scrip_name TEXT,
                             FOREIGN KEY (demat_account_id) REFERENCES demat_accounts(id)
                         )
                     ''')
                     
-                    # Create a default demat account
-                    c.execute('''
-                        INSERT INTO demat_accounts (name, description)
-                        VALUES (?, ?)
-                    ''', ("Default Account", "Default demat account for existing transactions"))
-                    default_account_id = c.lastrowid
-                    
-                    # Copy data from old table to new table
+                    # Copy data to new table
                     c.execute('''
                         INSERT INTO transactions_new 
-                        SELECT *, ? FROM transactions
-                    ''', (default_account_id,))
+                        SELECT * FROM transactions
+                    ''')
                     
                     # Drop old table and rename new table
                     c.execute('DROP TABLE transactions')
@@ -94,6 +122,11 @@ class DatabaseManager:
                         amount REAL,
                         transaction_type TEXT,
                         demat_account_id INTEGER,
+                        transaction_category TEXT,
+                        expiry_date DATE,
+                        instrument_type TEXT,
+                        strike_price REAL,
+                        old_scrip_name TEXT,
                         FOREIGN KEY (demat_account_id) REFERENCES demat_accounts(id)
                     )
                 ''')
@@ -137,7 +170,10 @@ class DatabaseManager:
 
     def add_transaction(self, financial_year: str, serial_number: int, scrip_name: str, 
                        date: datetime, transaction_type: str, num_shares: int, 
-                       rate: float, amount: float, demat_account_id: int) -> bool:
+                       rate: float, amount: float, demat_account_id: int,
+                       transaction_category: str = "EQUITY", expiry_date: datetime = None,
+                       instrument_type: str = None, strike_price: float = None,
+                       old_scrip_name: str = None) -> bool:
         """Add a new transaction to the database"""
         try:
             with sqlite3.connect(self.db_name, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
@@ -145,10 +181,14 @@ class DatabaseManager:
                 cursor.execute('''
                     INSERT INTO transactions (
                         financial_year, serial_number, scrip_name, date,
-                        transaction_type, num_shares, rate, amount, demat_account_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        transaction_type, num_shares, rate, amount, demat_account_id,
+                        transaction_category, expiry_date, instrument_type, strike_price,
+                        old_scrip_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (financial_year, serial_number, scrip_name, date,
-                      transaction_type, num_shares, rate, amount, demat_account_id))
+                      transaction_type, num_shares, rate, amount, demat_account_id,
+                      transaction_category, expiry_date, instrument_type, strike_price,
+                      old_scrip_name))
                 conn.commit()
                 return True
         except Exception as e:

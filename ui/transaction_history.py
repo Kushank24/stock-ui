@@ -14,12 +14,14 @@ class TransactionHistory:
         if not df.empty:
             # Add filters
             st.subheader("Filters")
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 fy_filter = st.multiselect("Financial Year", df['financial_year'].unique())
                 scrip_filter = st.multiselect("Scrip Name", sorted(df['scrip_name'].unique()))
             with col2:
                 type_filter = st.multiselect("Transaction Type", df['transaction_type'].unique())
+                category_filter = st.multiselect("Transaction Category", df['transaction_category'].unique())
+            with col3:
                 date_range = st.date_input("Date Range", value=[])
 
             # Apply filters
@@ -30,6 +32,8 @@ class TransactionHistory:
                 filtered_df = filtered_df[filtered_df['transaction_type'].isin(type_filter)]
             if scrip_filter:
                 filtered_df = filtered_df[filtered_df['scrip_name'].isin(scrip_filter)]
+            if category_filter:
+                filtered_df = filtered_df[filtered_df['transaction_category'].isin(category_filter)]
             if len(date_range) == 2:
                 filtered_df = filtered_df[(filtered_df['date'] >= date_range[0]) & 
                                         (filtered_df['date'] <= date_range[1])]
@@ -40,14 +44,34 @@ class TransactionHistory:
             display_df['amount'] = display_df['amount'].round(2)
 
             # Create a DataFrame for display with correct column order
-            display_df = display_df[['date', 'financial_year', 'scrip_name', 'num_shares', 'rate', 'amount', 'transaction_type']]
+            display_columns = [
+                'date', 'financial_year', 'transaction_category', 'scrip_name', 
+                'num_shares', 'rate', 'amount', 'transaction_type'
+            ]
+            
+            # Add F&O specific columns if any F&O transactions exist
+            if 'expiry_date' in display_df.columns and not display_df['expiry_date'].isna().all():
+                display_columns.extend(['expiry_date', 'instrument_type', 'strike_price'])
+            
+            display_df = display_df[display_columns]
             
             # Style the transaction type column with colors
             def style_transaction_type(val):
                 color_map = {
+                    # Buy effect transactions (green)
                     'BUY': 'background-color: #90EE90',  # Light green
+                    'IPO': 'background-color: #90EE90',  # Light green
+                    'BONUS': 'background-color: #90EE90',  # Light green
+                    'RIGHT': 'background-color: #90EE90',  # Light green
+                    'DEMERGER': 'background-color: #90EE90',  # Light green
+                    'MERGER': 'background-color: #90EE90',  # Light green
+                    
+                    # Sell effect transactions (red)
                     'SELL': 'background-color: #FFB6C1',  # Light red
-                    'BONUS': 'background-color: #90EE90'  # Light green
+                    'BUYBACK': 'background-color: #FFB6C1',  # Light red
+                    
+                    # Special cases (blue)
+                    'MERGER & ACQUISITION': 'background-color: #ADD8E6'  # Light blue
                 }
                 return color_map.get(val.upper(), '')
 
@@ -61,7 +85,33 @@ class TransactionHistory:
             st.dataframe(
                 styled_df,
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
+                column_config={
+                    "rate": st.column_config.NumberColumn(
+                        "Premium/Rate",
+                        format="₹%.7f"
+                    ),
+                    "amount": st.column_config.NumberColumn(
+                        "Total Amount",
+                        format="₹%.7f"
+                    ),
+                    "strike_price": st.column_config.NumberColumn(
+                        "Strike Price",
+                        format="₹%.7f"
+                    ),
+                    "instrument_type": st.column_config.TextColumn(
+                        "Instrument",
+                        help="CE: Call Option, PE: Put Option, FUT: Future"
+                    ),
+                    "expiry_date": st.column_config.DateColumn(
+                        "Expiry Date",
+                        format="DD/MM/YYYY"
+                    ),
+                    "transaction_type": st.column_config.TextColumn(
+                        "Transaction Type",
+                        help="BUY/SELL: Regular transactions\nIPO/BONUS/RIGHT: Buy effect transactions\nBUYBACK: Sell effect transaction\nDEMERGER/MERGER: Corporate actions"
+                    )
+                }
             )
 
             # Add delete functionality

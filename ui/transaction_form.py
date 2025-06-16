@@ -19,8 +19,19 @@ class TransactionForm:
         if 'form_submitted' not in st.session_state:
             st.session_state.form_submitted = False
         
+        # Check if charges were updated
+        if 'charges_updated' in st.session_state and st.session_state.charges_updated:
+            st.session_state.charges_updated = False
+            st.rerun()
+        
         # Create form
         with st.form(key="transaction_form", clear_on_submit=True):
+            # Transaction category selection
+            transaction_category = st.selectbox(
+                "Transaction Category",
+                ["EQUITY", "F&O EQUITY", "F&O COMMODITY"]
+            )
+            
             # Date input
             date = st.date_input("Date", value=datetime.now())
             
@@ -32,14 +43,71 @@ class TransactionForm:
             # Scrip name input
             scrip_name = st.text_input("Scrip Name")
             
+            # F&O specific fields
+            if transaction_category in ["F&O EQUITY", "F&O COMMODITY"]:
+                col1, col2 = st.columns(2)
+                with col1:
+                    expiry_date = st.date_input("Expiry Date")
+                    instrument_type = st.selectbox("Instrument Type", ["CE", "PE", "FUT"])
+                with col2:
+                    strike_price = st.number_input("Strike Price", min_value=0.0, step=0.01)
+            
             # Transaction type selection
-            transaction_type = st.selectbox("Transaction Type", ["BUY", "SELL", "BONUS"])
+            if transaction_category == "EQUITY":
+                transaction_type = st.selectbox(
+                    "Transaction Type",
+                    [
+                        "BUY",
+                        "SELL",
+                        "IPO (EFFECT OF BUY)",
+                        "BONUS (EFFECT OF BUY)",
+                        "RIGHT (EFFECT OF BUY)",
+                        "BUYBACK (EFFECT OF SELL)",
+                        "DEMERGER (EFFECT OF BUY)",
+                        "MERGER & ACQUISITION"
+                    ]
+                )
+                # Exchange selection for equity transactions
+                exchange = st.selectbox("Exchange", ["NSE", "BSE"])
+            else:
+                transaction_type = st.selectbox("Transaction Type", ["BUY", "SELL"])
             
-            # Number of shares
-            num_shares = st.number_input("Number of Shares", min_value=1, step=1)
-            
-            # Rate per share
-            rate = st.number_input("Rate per Share", min_value=0.0, step=0.01)
+            # Special handling for merger & acquisition
+            if transaction_type == "MERGER & ACQUISITION":
+                st.subheader("Merger & Acquisition Details")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write("Old Share (Company being acquired)")
+                    old_scrip_name = st.text_input("Old Scrip Name")
+                    old_shares = st.number_input("Number of Old Shares", min_value=1, step=1)
+                    old_rate = st.number_input("Rate per Old Share", min_value=0.0, step=0.01)
+                
+                with col2:
+                    st.write("New Share (Acquirer)")
+                    new_scrip_name = st.text_input("New Scrip Name")
+                    new_shares = st.number_input("Number of New Shares", min_value=1, step=1)
+                
+                # Calculate the effective rate for the new shares
+                if old_shares > 0 and new_shares > 0:
+                    # Use the old shares' value as the base amount
+                    base_amount = old_shares * old_rate
+                    effective_rate = base_amount / new_shares
+                    st.write(f"Effective Rate per New Share: ₹{effective_rate:.7f}")
+                    
+                    # Update the values for the transaction
+                    scrip_name = new_scrip_name
+                    num_shares = new_shares
+                    rate = effective_rate
+            else:
+                # Number of shares/lots
+                num_shares = st.number_input("Quantity", min_value=1, step=1)
+                
+                # Rate per share/lot
+                if transaction_category in ["F&O EQUITY", "F&O COMMODITY"]:
+                    rate = st.number_input("Premium", min_value=0.0, step=0.01)
+                else:
+                    rate = st.number_input("Rate per Share", min_value=0.0, step=0.01)
             
             # Calculate base amount
             base_amount = num_shares * rate
@@ -47,25 +115,45 @@ class TransactionForm:
             # Calculate charges if it's a BUY or SELL transaction
             charges_details = {}
             total_charges = 0
-            if transaction_type in ["BUY", "SELL"]:
-                charges_details, total_charges = self.charges.calculate_charges(base_amount)
+            if transaction_type in ["BUY", "SELL"] or transaction_category == "EQUITY":
+                # Convert transaction category to match charges table format
+                category = transaction_category.replace(" ", "_")
+                charges_details, total_charges = self.charges.calculate_charges(
+                    base_amount,
+                    transaction_type.split(" ")[0] if " " in transaction_type else transaction_type,
+                    exchange if transaction_category == "EQUITY" else "NSE",
+                    category
+                )
                 
                 # Display charges breakdown
                 st.subheader("Transaction Charges")
                 charges_col1, charges_col2 = st.columns(2)
                 with charges_col1:
                     for charge_type, amount in charges_details.items():
-                        st.write(f"{charge_type.replace('_', ' ').title()}: ₹{amount:.2f}")
+                        if charge_type == 'BROKERAGE':
+                            st.write(f"{charge_type.replace('_', ' ').title()}: ₹{amount:.2f}")
+                        else:
+                            st.write(f"{charge_type.replace('_', ' ').title()}: ₹{amount:.7f}")
                 with charges_col2:
-                    st.write(f"Total Charges: ₹{total_charges:.2f}")
+                    st.write(f"Total Charges: ₹{total_charges:.7f}")
             
             # Calculate total amount including charges
-            total_amount = base_amount + total_charges
+            # For SELL and BUYBACK transactions, subtract charges from base amount
+            if transaction_type in ["SELL", "BUYBACK"]:
+                total_amount = base_amount - total_charges
+            else:
+                total_amount = base_amount + total_charges
             
             # Display total amount
             st.subheader("Total Amount")
-            st.write(f"Base Amount: ₹{base_amount:.2f}")
-            st.write(f"Total Amount (including charges): ₹{total_amount:.2f}")
+            if transaction_category in ["F&O EQUITY", "F&O COMMODITY"]:
+                st.write(f"Premium Amount: ₹{base_amount:.7f}")
+            else:
+                st.write(f"Base Amount: ₹{base_amount:.7f}")
+            if transaction_type in ["SELL", "BUYBACK"]:
+                st.write(f"Total Amount (after deducting charges): ₹{total_amount:.7f}")
+            else:
+                st.write(f"Total Amount (including charges): ₹{total_amount:.7f}")
             
             # Submit button
             submitted = st.form_submit_button("Add Transaction")
@@ -87,8 +175,13 @@ class TransactionForm:
                     transaction_type=transaction_type,
                     num_shares=num_shares,
                     rate=rate,
-                    amount=total_amount,  # Store the total amount including charges
-                    demat_account_id=demat_account_id
+                    amount=total_amount,
+                    demat_account_id=demat_account_id,
+                    transaction_category=transaction_category,
+                    expiry_date=expiry_date if transaction_category in ["F&O EQUITY", "F&O COMMODITY"] else None,
+                    instrument_type=instrument_type if transaction_category in ["F&O EQUITY", "F&O COMMODITY"] else None,
+                    strike_price=strike_price if transaction_category in ["F&O EQUITY", "F&O COMMODITY"] else None,
+                    old_scrip_name=old_scrip_name if transaction_type == "MERGER & ACQUISITION" else None
                 )
                 
                 if success:

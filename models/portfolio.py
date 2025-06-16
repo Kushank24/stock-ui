@@ -61,6 +61,23 @@ class PortfolioManager:
                 portfolio[scrip].average_price = current_total / new_quantity
                 portfolio[scrip].quantity = new_quantity
 
+            elif trans_type == 'MERGER & ACQUISITION':
+                # For mergers, we need to handle both old and new shares
+                old_scrip = row.get('old_scrip_name')
+                if old_scrip:
+                    # Remove old shares from portfolio
+                    if old_scrip in portfolio:
+                        portfolio[old_scrip].quantity = 0  # Set to 0 to remove from final list
+                
+                # Add new shares with the effective rate
+                current_total = portfolio[scrip].quantity * portfolio[scrip].average_price
+                new_total = quantity * price  # price here is the effective rate
+                new_quantity = portfolio[scrip].quantity + quantity
+                
+                if new_quantity > 0:  # Avoid division by zero
+                    portfolio[scrip].average_price = (current_total + new_total) / new_quantity
+                portfolio[scrip].quantity = new_quantity
+
             # Update total value
             portfolio[scrip].total_value = portfolio[scrip].quantity * portfolio[scrip].average_price
 

@@ -4,13 +4,23 @@ A comprehensive stock transaction management system built with Python and Stream
 
 ## Features
 
-### 1. Transaction Management
+### 1. Multi-Demat Account Management
+- Support for managing multiple demat accounts simultaneously
+- Unified dashboard to monitor all accounts
+- Account-specific transaction tracking and reporting
+- Easy switching between different demat accounts
+- Consolidated portfolio view across all accounts
+- Individual charge configuration per account
+
+### 2. Transaction Management
 - Record and track stock transactions (BUY, SELL, IPO, BONUS, RIGHT, BUYBACK, DEMERGER, MERGER)
 - Support for multiple exchanges (NSE, BSE, MCX, NCDEX)
 - Transaction history with detailed information
 - Color-coded transaction types for better visualization
+- Transaction-specific charge calculation
+- Support for corporate actions (Bonus, Rights, Mergers, etc.)
 
-### 2. Charge Calculation
+### 3. Charge Calculation
 - Automatic calculation of various charges for different transaction types:
   - Brokerage
   - DP Charges
@@ -21,21 +31,35 @@ A comprehensive stock transaction management system built with Python and Stream
   - SEBI Charges
   - IPFT
   - GST
+- Account-specific charge configuration
+- Real-time charge preview before transaction entry
+- Detailed charge breakdown for each transaction
 
-### 3. Category-wise Charge Management
+### 4. Category-wise Charge Management
 - **Equity Charges**
   - Configure charges for NSE and BSE
   - Support for both BUY and SELL transactions
+  - Account-specific charge rates
 
 - **F&O Equity Charges**
   - Configure charges for NSE and BSE
   - Support for Futures and Options
   - Separate charge configuration for FUT and OPT
+  - Account-specific brokerage rates
 
 - **F&O Commodity Charges**
   - Configure charges for MCX and NCDEX
   - Support for Futures and Options
   - CTT instead of STT for commodity transactions
+  - Account-specific charge rates
+
+### 5. Portfolio Management
+- Real-time portfolio tracking across all demat accounts
+- Consolidated view of holdings
+- Profit/Loss calculation
+- Transaction history per account
+- Portfolio performance metrics
+- Asset allocation visualization
 
 ## Installation
 

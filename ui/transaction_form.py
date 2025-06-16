@@ -59,11 +59,11 @@ class TransactionForm:
                     [
                         "BUY",
                         "SELL",
-                        "IPO (EFFECT OF BUY)",
-                        "BONUS (EFFECT OF BUY)",
-                        "RIGHT (EFFECT OF BUY)",
-                        "BUYBACK (EFFECT OF SELL)",
-                        "DEMERGER (EFFECT OF BUY)",
+                        "IPO",
+                        "BONUS",
+                        "RIGHT",
+                        "BUYBACK",
+                        "DEMERGER",
                         "MERGER & ACQUISITION"
                     ]
                 )

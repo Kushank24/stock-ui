@@ -58,20 +58,23 @@ class TransactionHistory:
             # Style the transaction type column with colors
             def style_transaction_type(val):
                 color_map = {
-                    # Buy effect transactions (green)
-                    'BUY': 'background-color: #90EE90',  # Light green
-                    'IPO': 'background-color: #90EE90',  # Light green
-                    'BONUS': 'background-color: #90EE90',  # Light green
-                    'RIGHT': 'background-color: #90EE90',  # Light green
-                    'DEMERGER': 'background-color: #90EE90',  # Light green
-                    'MERGER': 'background-color: #90EE90',  # Light green
+                    # Regular buy transactions (green)
+                    'BUY': 'background-color: #4CAF50',  # Material Green
                     
-                    # Sell effect transactions (red)
-                    'SELL': 'background-color: #FFB6C1',  # Light red
-                    'BUYBACK': 'background-color: #FFB6C1',  # Light red
+                    # Regular sell transactions (red)
+                    'SELL': 'background-color: #F44336',  # Material Red
                     
-                    # Special cases (blue)
-                    'MERGER & ACQUISITION': 'background-color: #ADD8E6'  # Light blue
+                    # Buy effect transactions (light green)
+                    'IPO': 'background-color: #81C784',  # Light Material Green
+                    'BONUS': 'background-color: #81C784',  # Light Material Green
+                    'RIGHT': 'background-color: #81C784',  # Light Material Green
+                    
+                    # Sell effect transactions (light red)
+                    'BUYBACK': 'background-color: #E57373',  # Light Material Red
+                    
+                    # Corporate actions (blue)
+                    'DEMERGER': 'background-color: #2196F3',  # Material Blue
+                    'MERGER & ACQUISITION': 'background-color: #2196F3'  # Material Blue
                 }
                 return color_map.get(val.upper(), '')
 

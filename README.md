@@ -1,8 +1,7 @@
 # Stock Transaction Management System
 
 A comprehensive stock transaction management system built with Python and Streamlit, designed to help users track and manage their stock market transactions, calculate charges, and maintain a detailed transaction history.
-
-https://github.com/user-attachments/assets/9b6c8d45-647a-4dd1-a88a-6ce5289018d5
+https://github.com/user-attachments/assets/26825b95-7376-41b3-b145-82e9369870a9
 
 ## Features
 

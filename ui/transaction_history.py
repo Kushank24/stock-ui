@@ -53,7 +53,7 @@ class TransactionHistory:
             if 'expiry_date' in display_df.columns and not display_df['expiry_date'].isna().all():
                 display_columns.extend(['expiry_date', 'instrument_type', 'strike_price'])
             
-            display_df = display_df[display_columns]
+            display_df = filtered_df[display_columns]
             
             # Style the transaction type column with colors
             def style_transaction_type(val):
@@ -149,14 +149,27 @@ class TransactionHistory:
                     else:
                         success = True
                         for idx in selected_indices:
-                            # Get the original row from filtered_df using the index
-                            original_idx = filtered_df.index[idx]
+                            # Get the row from the edited DataFrame
+                            row = edited_df.loc[idx]
                             
-                            # Get the values from the original DataFrame
-                            financial_year = str(filtered_df.loc[original_idx, 'financial_year'])
-                            serial_number = int(filtered_df.loc[original_idx, 'serial_number'])
-                            scrip_name = str(filtered_df.loc[original_idx, 'scrip_name'])
-                            date = filtered_df.loc[original_idx, 'date']
+                            # Get the values from the row
+                            financial_year = str(row['financial_year'])
+                            scrip_name = str(row['scrip_name'])
+                            date = row['date']
+                            
+                            # Get the serial number from the original filtered DataFrame
+                            matching_row = filtered_df[
+                                (filtered_df['financial_year'] == financial_year) &
+                                (filtered_df['scrip_name'] == scrip_name) &
+                                (filtered_df['date'] == date)
+                            ]
+                            
+                            if matching_row.empty:
+                                st.error(f"Could not find matching transaction for deletion at index {idx}")
+                                success = False
+                                continue
+                                
+                            serial_number = int(matching_row.iloc[0]['serial_number'])
                             
                             # Skip if any required field is empty
                             if pd.isna(financial_year) or pd.isna(serial_number) or pd.isna(scrip_name) or pd.isna(date):

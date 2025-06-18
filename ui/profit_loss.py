@@ -3,6 +3,7 @@ import pandas as pd
 from models.database import DatabaseManager
 import sqlite3
 from datetime import datetime
+from ui.charges import Charges
 
 class ProfitLoss:
     def __init__(self, db_manager: DatabaseManager):
@@ -14,7 +15,12 @@ class ProfitLoss:
         # Get all transactions
         with sqlite3.connect(self.db_manager.db_name, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
             transactions_df = pd.read_sql_query(
-                "SELECT * FROM transactions WHERE demat_account_id = ? AND transaction_category = ? ORDER BY date",
+                """
+                SELECT * FROM transactions 
+                WHERE demat_account_id = ? 
+                AND transaction_category = ? 
+                ORDER BY date, scrip_name, expiry_date, instrument_type, strike_price
+                """,
                 conn,
                 params=(demat_account_id, transaction_category)
             )
@@ -38,6 +44,7 @@ class ProfitLoss:
 
         # Create a list to store P&L data
         pnl_data = []
+        charges = Charges(self.db_manager)
 
         # For each sell transaction, find matching buy transactions
         for _, sell_row in sell_transactions.iterrows():
@@ -45,6 +52,18 @@ class ProfitLoss:
             sell_shares = sell_row['num_shares']
             sell_date = pd.to_datetime(sell_row['date']).date()  # Convert to date
             sell_price = sell_row['rate']
+            exchange = sell_row.get('exchange', 'NSE')  # Default to NSE if not specified
+            
+            # Calculate sell charges
+            sell_base_amount = sell_shares * sell_price
+            sell_charges_details, sell_total_charges = charges.calculate_charges(
+                sell_base_amount,
+                'SELL',
+                exchange,
+                'EQUITY',
+                'EQUITY'
+            )
+            effective_sell_price = sell_price - (sell_total_charges / sell_shares)
             
             # Get all buy transactions for this scrip before the sell date
             buy_transactions = transactions_df[
@@ -63,12 +82,24 @@ class ProfitLoss:
                 buy_shares = buy_row['num_shares']
                 buy_date = pd.to_datetime(buy_row['date']).date()  # Convert to date
                 buy_price = buy_row['rate']
+                buy_exchange = buy_row.get('exchange', 'NSE')  # Default to NSE if not specified
+                
+                # Calculate buy charges
+                buy_base_amount = buy_shares * buy_price
+                buy_charges_details, buy_total_charges = charges.calculate_charges(
+                    buy_base_amount,
+                    'BUY',
+                    buy_exchange,
+                    'EQUITY',
+                    'EQUITY'
+                )
+                effective_buy_price = buy_price + (buy_total_charges / buy_shares)
                 
                 # Calculate shares to match
                 shares_to_match = min(remaining_sell_shares, buy_shares)
                 
-                # Calculate profit/loss
-                profit_loss = (sell_price - buy_price) * shares_to_match
+                # Calculate profit/loss including charges
+                profit_loss = (effective_sell_price - effective_buy_price) * shares_to_match
                 
                 # Determine if short term or long term
                 holding_period = (sell_date - buy_date).days
@@ -78,10 +109,10 @@ class ProfitLoss:
                     'SCRIP': scrip,
                     'SALE_SHARES': shares_to_match,
                     'SALE_DATE': sell_date,
-                    'SALE_PRICE': sell_price,
+                    'SALE_PRICE': effective_sell_price,
                     'PURCHASE_SHARES': shares_to_match,
                     'PURCHASE_DATE': buy_date,
-                    'PURCHASE_PRICE': buy_price,
+                    'PURCHASE_PRICE': effective_buy_price,
                     'PROFIT_LOSS': profit_loss,
                     'TERM_TYPE': term_type
                 })
@@ -91,14 +122,15 @@ class ProfitLoss:
         self._display_pnl_table(pnl_data)
 
     def _render_fno_pnl(self, transactions_df):
-        # Group transactions by scrip, expiry, instrument type, strike price, and transaction category
+        # Group transactions by scrip, expiry, instrument type, and transaction category
         grouped_transactions = transactions_df.groupby(
-            ['scrip_name', 'expiry_date', 'instrument_type', 'strike_price', 'transaction_category']
+            ['scrip_name', 'expiry_date', 'instrument_type', 'transaction_category']
         )
 
         pnl_data = []
+        charges = Charges(self.db_manager)
 
-        for (scrip, expiry, instrument, strike, category), group in grouped_transactions:
+        for (scrip, expiry, instrument, category), group in grouped_transactions:
             # Sort by date
             group = group.sort_values('date')
             
@@ -110,18 +142,50 @@ class ProfitLoss:
             total_sell_qty = sell_transactions['num_shares'].sum()
             
             if total_buy_qty > 0 and total_sell_qty > 0:
-                # Calculate average buy and sell prices
-                avg_buy_price = (buy_transactions['rate'] * buy_transactions['num_shares']).sum() / total_buy_qty
-                avg_sell_price = (sell_transactions['rate'] * sell_transactions['num_shares']).sum() / total_sell_qty
+                # Calculate average buy and sell prices with charges
+                buy_amounts = []
+                for _, buy_row in buy_transactions.iterrows():
+                    base_amount = buy_row['num_shares'] * buy_row['rate']
+                    exchange = buy_row.get('exchange', 'MCX' if category == 'F&O COMMODITY' else 'NSE')
+                    charge_category = category.replace(" ", "_")
+                    charge_instrument_type = "OPT" if instrument in ["CE", "PE"] else "FUT"
+                    _, total_charges = charges.calculate_charges(
+                        base_amount,
+                        'BUY',
+                        exchange,
+                        charge_category,
+                        charge_instrument_type
+                    )
+                    buy_amounts.append((buy_row['num_shares'], buy_row['rate'] + (total_charges / buy_row['num_shares'])))
                 
-                # Calculate profit/loss
-                profit_loss = (avg_sell_price - avg_buy_price) * min(total_buy_qty, total_sell_qty)
+                sell_amounts = []
+                for _, sell_row in sell_transactions.iterrows():
+                    base_amount = sell_row['num_shares'] * sell_row['rate']
+                    exchange = sell_row.get('exchange', 'MCX' if category == 'F&O COMMODITY' else 'NSE')
+                    charge_category = category.replace(" ", "_")
+                    charge_instrument_type = "OPT" if instrument in ["CE", "PE"] else "FUT"
+                    _, total_charges = charges.calculate_charges(
+                        base_amount,
+                        'SELL',
+                        exchange,
+                        charge_category,
+                        charge_instrument_type
+                    )
+                    sell_amounts.append((sell_row['num_shares'], sell_row['rate'] - (total_charges / sell_row['num_shares'])))
+                
+                # Calculate weighted averages
+                avg_buy_price = sum(qty * price for qty, price in buy_amounts) / total_buy_qty
+                avg_sell_price = sum(qty * price for qty, price in sell_amounts) / total_sell_qty
+                
+                # Calculate profit/loss for the matched quantity
+                matched_qty = min(total_buy_qty, total_sell_qty)
+                profit_loss = (avg_sell_price - avg_buy_price) * matched_qty
                 
                 pnl_data.append({
                     'SCRIP': scrip,
                     'EXPIRY': expiry,
                     'INSTRUMENT': instrument,
-                    'STRIKE_PRICE': strike,
+                    'STRIKE_PRICE': group['strike_price'].iloc[0] if instrument in ["CE", "PE"] else None,
                     'CATEGORY': category,
                     'BUY_DATE': buy_transactions['date'].min(),
                     'BUY_QTY': total_buy_qty,
@@ -131,17 +195,23 @@ class ProfitLoss:
                     'SELL_QTY': total_sell_qty,
                     'SELL_PREMIUM': avg_sell_price,
                     'SELL_TOTAL': avg_sell_price * total_sell_qty,
-                    'PROFIT_LOSS': profit_loss
+                    'PROFIT_LOSS': profit_loss,
+                    'UNMATCHED_QTY': abs(total_buy_qty - total_sell_qty)
                 })
 
         if pnl_data:
             # Create DataFrame for display
             display_df = pd.DataFrame(pnl_data)
             
-            # Format numbers
-            numeric_columns = ['STRIKE_PRICE', 'BUY_PREMIUM', 'BUY_TOTAL', 'SELL_PREMIUM', 'SELL_TOTAL', 'PROFIT_LOSS']
+            # Format numbers - handle STRIKE_PRICE separately since it can be None
+            numeric_columns = ['BUY_PREMIUM', 'BUY_TOTAL', 'SELL_PREMIUM', 'SELL_TOTAL', 'PROFIT_LOSS']
             for col in numeric_columns:
                 display_df[col] = display_df[col].round(2)
+            
+            # Handle STRIKE_PRICE separately - only round if not None
+            display_df['STRIKE_PRICE'] = display_df['STRIKE_PRICE'].apply(
+                lambda x: round(x, 2) if pd.notnull(x) else None
+            )
             
             # Style the DataFrame
             def style_profit_loss(val):
@@ -164,7 +234,8 @@ class ProfitLoss:
                 column_config={
                     "STRIKE_PRICE": st.column_config.NumberColumn(
                         "Strike Price",
-                        format="₹%.2f"
+                        format="₹%.2f",
+                        help="Strike price for options (CE/PE) only"
                     ),
                     "BUY_PREMIUM": st.column_config.NumberColumn(
                         "Buy Premium",

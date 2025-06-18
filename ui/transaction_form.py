@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from models.database import DatabaseManager
+from models.database import DatabaseManager, Transaction
 from models.portfolio import PortfolioManager
 import sqlite3
 from ui.charges import Charges
@@ -15,84 +15,98 @@ class TransactionForm:
     def render(self, demat_account_id: int):
         st.title("Add New Transaction")
         
-        # Initialize session state for form data if not exists
+        # Initialize session state variables if they don't exist
         if 'form_submitted' not in st.session_state:
             st.session_state.form_submitted = False
+        if 'transaction_status' not in st.session_state:
+            st.session_state.transaction_status = None
+        if 'transaction_message' not in st.session_state:
+            st.session_state.transaction_message = None
         
         # Check if charges were updated
         if 'charges_updated' in st.session_state and st.session_state.charges_updated:
             st.session_state.charges_updated = False
             st.rerun()
         
-        # Create form
-        with st.form(key="transaction_form", clear_on_submit=True):
-            # Transaction category selection
+        # Create a form for transaction details
+        with st.form("transaction_form"):
+            # Financial Year
+            current_year = datetime.now().year
+            financial_year = st.selectbox(
+                "Financial Year",
+                [f"{year}-{year+1}" for year in range(current_year-1, current_year+1)],
+                index=1
+            )
+            
+            # Transaction Date
+            transaction_date = st.date_input(
+                "Transaction Date",
+                value=datetime.now().date(),
+                max_value=datetime.now().date()
+            )
+            
+            # Transaction Category
             transaction_category = st.selectbox(
                 "Transaction Category",
                 ["EQUITY", "F&O EQUITY", "F&O COMMODITY"]
             )
             
-            # Exchange selection based on category (moved outside the form)
-            if transaction_category == "EQUITY":
-                exchange = st.selectbox("Exchange", ["NSE", "BSE"])
+            # Exchange selection based on category
+            if transaction_category == "F&O COMMODITY":
+                exchange = st.selectbox("Exchange", ["MCX", "NCDEX"])
             elif transaction_category == "F&O EQUITY":
                 exchange = st.selectbox("Exchange", ["NSE", "BSE"])
-            else:  # F&O COMMODITY
-                exchange = st.selectbox("Exchange", ["MCX", "NCDEX"])
+            else:  # EQUITY
+                exchange = st.selectbox("Exchange", ["NSE", "BSE"])
             
-            # Date input
-            date = st.date_input("Date", value=datetime.now())
+            # Transaction Type
+            if transaction_category == "EQUITY":
+                transaction_type = st.selectbox(
+                    "Transaction Type",
+                    ["BUY", "SELL", "IPO", "BONUS", "RIGHT", "BUYBACK", "DEMERGER", "MERGER & ACQUISITION"]
+                )
+            else:  # F&O
+                transaction_type = st.selectbox(
+                    "Transaction Type",
+                    ["BUY", "SELL"]
+                )
             
-            # Financial year selection
-            current_year = datetime.now().year
-            financial_years = [f"{year}-{year+1}" for year in range(current_year-2, current_year+1)]
-            financial_year = st.selectbox("Financial Year", financial_years)
-            
-            # Scrip name input
+            # Scrip Name
             scrip_name = st.text_input("Scrip Name")
             
-            # F&O specific fields
+            # For F&O transactions, add expiry date and instrument type
             if transaction_category in ["F&O EQUITY", "F&O COMMODITY"]:
                 col1, col2 = st.columns(2)
                 with col1:
                     expiry_date = st.date_input("Expiry Date")
-                    instrument_type = st.selectbox("Instrument Type", ["CE", "PE", "FUT"])
                 with col2:
+                    instrument_type = st.selectbox(
+                        "Instrument Type",
+                        ["FUT", "CE", "PE"]
+                    )
+                
+                # Strike Price (only for options)
+                if instrument_type in ["CE", "PE"]:
                     strike_price = st.number_input("Strike Price", min_value=0.0, step=0.01)
-            
-            # Transaction type selection
-            if transaction_category == "EQUITY":
-                transaction_type = st.selectbox(
-                    "Transaction Type",
-                    [
-                        "BUY",
-                        "SELL",
-                        "IPO",
-                        "BONUS",
-                        "RIGHT",
-                        "BUYBACK",
-                        "DEMERGER",
-                        "MERGER & ACQUISITION"
-                    ]
-                )
+                else:
+                    strike_price = None
             else:
-                transaction_type = st.selectbox("Transaction Type", ["BUY", "SELL"])
+                expiry_date = None
+                instrument_type = None
+                strike_price = None
             
-            # Special handling for merger & acquisition
+            # For MERGER & ACQUISITION, add old scrip details
             if transaction_type == "MERGER & ACQUISITION":
-                st.subheader("Merger & Acquisition Details")
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    st.write("Old Share (Company being acquired)")
                     old_scrip_name = st.text_input("Old Scrip Name")
-                    old_shares = st.number_input("Number of Old Shares", min_value=1, step=1)
-                    old_rate = st.number_input("Rate per Old Share", min_value=0.0, step=0.01)
-                
                 with col2:
-                    st.write("New Share (Acquirer)")
-                    new_scrip_name = st.text_input("New Scrip Name")
-                    new_shares = st.number_input("Number of New Shares", min_value=1, step=1)
+                    old_shares = st.number_input("Old Shares", min_value=0, step=1)
+                
+                # New scrip details
+                new_scrip_name = st.text_input("New Scrip Name")
+                new_shares = st.number_input("New Shares", min_value=0, step=1)
+                old_rate = st.number_input("Old Rate per Share", min_value=0.0, step=0.01)
                 
                 # Calculate the effective rate for the new shares
                 if old_shares > 0 and new_shares > 0:
@@ -183,32 +197,35 @@ class TransactionForm:
                 # Get the next serial number for this financial year
                 serial_number = self.db_manager.get_next_serial_number(financial_year)
                 
-                # Add transaction to database
-                success = self.db_manager.add_transaction(
+                # Create transaction record
+                transaction = Transaction(
                     financial_year=financial_year,
                     serial_number=serial_number,
                     scrip_name=scrip_name,
-                    date=date,
-                    transaction_type=transaction_type,
+                    date=transaction_date,  # Use the selected transaction date
                     num_shares=num_shares,
                     rate=rate,
                     amount=total_amount,
+                    transaction_type=transaction_type,
                     demat_account_id=demat_account_id,
                     transaction_category=transaction_category,
-                    expiry_date=expiry_date if transaction_category in ["F&O EQUITY", "F&O COMMODITY"] else None,
-                    instrument_type=instrument_type if transaction_category in ["F&O EQUITY", "F&O COMMODITY"] else None,
-                    strike_price=strike_price if transaction_category in ["F&O EQUITY", "F&O COMMODITY"] else None,
-                    old_scrip_name=old_scrip_name if transaction_type == "MERGER & ACQUISITION" else None
+                    expiry_date=expiry_date,
+                    instrument_type=instrument_type,
+                    strike_price=strike_price,
+                    old_scrip_name=old_scrip_name if transaction_type == "MERGER & ACQUISITION" else None,
+                    exchange=exchange  # Add exchange to the transaction
                 )
                 
-                if success:
-                    st.session_state.form_submitted = True
-                    st.session_state.transaction_message = "Transaction added successfully!"
-                    st.session_state.transaction_status = "success"
-                else:
-                    st.session_state.form_submitted = True
-                    st.session_state.transaction_message = "Failed to add transaction"
-                    st.session_state.transaction_status = "error"
+                # Save transaction
+                self.db_manager.save_transaction(transaction)
+                
+                # Set form submitted flag and success message
+                st.session_state.form_submitted = True
+                st.session_state.transaction_status = "success"
+                st.session_state.transaction_message = "Transaction added successfully!"
+                
+                # Rerun to clear form
+                st.rerun()
         
         # Display message outside the form
         if st.session_state.form_submitted:

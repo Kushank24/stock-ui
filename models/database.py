@@ -13,10 +13,55 @@ class Transaction:
     rate: float
     amount: float
     transaction_type: str
+    demat_account_id: int
+    transaction_category: str
+    expiry_date: Optional[datetime] = None
+    instrument_type: Optional[str] = None
+    strike_price: Optional[float] = None
+    old_scrip_name: Optional[str] = None
+    exchange: str = 'NSE'  # Default to NSE
 
 class DatabaseManager:
     def __init__(self, db_name: str = 'stock_transactions.db'):
         self.db_name = db_name
+        self.ensure_tables_exist()
+
+    def ensure_tables_exist(self):
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            
+            # Create demat_accounts table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS demat_accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT
+                )
+            """)
+            
+            # Create transactions table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS transactions (
+                    financial_year TEXT,
+                    serial_number INTEGER,
+                    scrip_name TEXT,
+                    date DATE,
+                    num_shares INTEGER,
+                    rate REAL,
+                    amount REAL,
+                    transaction_type TEXT,
+                    demat_account_id INTEGER,
+                    transaction_category TEXT,
+                    expiry_date DATE,
+                    instrument_type TEXT,
+                    strike_price REAL,
+                    old_scrip_name TEXT,
+                    exchange TEXT DEFAULT 'NSE',
+                    FOREIGN KEY (demat_account_id) REFERENCES demat_accounts(id)
+                )
+            """)
+            
+            conn.commit()
 
     def init_db(self):
         # Configure date adapter for SQLite
@@ -247,4 +292,38 @@ class DatabaseManager:
                 return True
         except Exception as e:
             print(f"Error deleting demat account: {e}")
+            return False
+
+    def save_transaction(self, transaction: Transaction) -> bool:
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO transactions (
+                        financial_year, serial_number, scrip_name, date, num_shares,
+                        rate, amount, transaction_type, demat_account_id,
+                        transaction_category, expiry_date, instrument_type,
+                        strike_price, old_scrip_name, exchange
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    transaction.financial_year,
+                    transaction.serial_number,
+                    transaction.scrip_name,
+                    transaction.date,
+                    transaction.num_shares,
+                    transaction.rate,
+                    transaction.amount,
+                    transaction.transaction_type,
+                    transaction.demat_account_id,
+                    transaction.transaction_category,
+                    transaction.expiry_date,
+                    transaction.instrument_type,
+                    transaction.strike_price,
+                    transaction.old_scrip_name,
+                    transaction.exchange
+                ))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Error saving transaction: {e}")
             return False

@@ -79,6 +79,22 @@ https://github.com/user-attachments/assets/2cace6a6-dc8d-4ff0-b85a-f2724948875c
 - Transaction history per account
 - Portfolio performance metrics
 - Asset allocation visualization
+- Support for short positions in F&O (Futures & Options)
+- Negative portfolio values for short positions
+- Unmatched quantity tracking for partial trades
+
+### 7. Profit & Loss Statement
+- Category-wise P&L calculation (EQUITY, F&O EQUITY, F&O COMMODITY)
+- Support for both long and short positions
+- Detailed breakdown of buy and sell transactions
+- Unmatched quantity tracking
+- Transaction charges included in P&L calculation
+- Support for:
+  - Equity trades
+  - F&O Equity (Futures and Options)
+  - F&O Commodity (Futures and Options)
+- Color-coded profit/loss display
+- Consolidated P&L summary
 
 ## Installation
 
@@ -117,6 +133,8 @@ streamlit run main.py
    - Transaction History: View and filter your transaction history
    - Charges: Configure and manage transaction charges for different categories
    - Transaction Entry: Add new transactions with automatic charge calculation
+   - Portfolio Overview: View your current holdings and positions
+   - Profit & Loss: Track your trading performance across different categories
 
 ## Database
 

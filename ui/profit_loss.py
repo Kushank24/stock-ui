@@ -91,14 +91,14 @@ class ProfitLoss:
         self._display_pnl_table(pnl_data)
 
     def _render_fno_pnl(self, transactions_df):
-        # Group transactions by scrip, expiry, instrument type, and strike price
+        # Group transactions by scrip, expiry, instrument type, strike price, and transaction category
         grouped_transactions = transactions_df.groupby(
-            ['scrip_name', 'expiry_date', 'instrument_type', 'strike_price']
+            ['scrip_name', 'expiry_date', 'instrument_type', 'strike_price', 'transaction_category']
         )
 
         pnl_data = []
 
-        for (scrip, expiry, instrument, strike), group in grouped_transactions:
+        for (scrip, expiry, instrument, strike, category), group in grouped_transactions:
             # Sort by date
             group = group.sort_values('date')
             
@@ -122,6 +122,7 @@ class ProfitLoss:
                     'EXPIRY': expiry,
                     'INSTRUMENT': instrument,
                     'STRIKE_PRICE': strike,
+                    'CATEGORY': category,
                     'BUY_DATE': buy_transactions['date'].min(),
                     'BUY_QTY': total_buy_qty,
                     'BUY_PREMIUM': avg_buy_price,

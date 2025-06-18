@@ -32,6 +32,14 @@ class TransactionForm:
                 ["EQUITY", "F&O EQUITY", "F&O COMMODITY"]
             )
             
+            # Exchange selection based on category (moved outside the form)
+            if transaction_category == "EQUITY":
+                exchange = st.selectbox("Exchange", ["NSE", "BSE"])
+            elif transaction_category == "F&O EQUITY":
+                exchange = st.selectbox("Exchange", ["NSE", "BSE"])
+            else:  # F&O COMMODITY
+                exchange = st.selectbox("Exchange", ["MCX", "NCDEX"])
+            
             # Date input
             date = st.date_input("Date", value=datetime.now())
             
@@ -67,8 +75,6 @@ class TransactionForm:
                         "MERGER & ACQUISITION"
                     ]
                 )
-                # Exchange selection for equity transactions
-                exchange = st.selectbox("Exchange", ["NSE", "BSE"])
             else:
                 transaction_type = st.selectbox("Transaction Type", ["BUY", "SELL"])
             
@@ -118,11 +124,22 @@ class TransactionForm:
             if transaction_type in ["BUY", "SELL"] or transaction_category == "EQUITY":
                 # Convert transaction category to match charges table format
                 category = transaction_category.replace(" ", "_")
+                
+                # Map CE/PE to OPT for charges calculation
+                if transaction_category in ["F&O EQUITY", "F&O COMMODITY"]:
+                    if instrument_type in ["CE", "PE"]:
+                        charge_instrument_type = "OPT"
+                    else:
+                        charge_instrument_type = "FUT"
+                else:
+                    charge_instrument_type = "EQUITY"
+                
                 charges_details, total_charges = self.charges.calculate_charges(
                     base_amount,
                     transaction_type.split(" ")[0] if " " in transaction_type else transaction_type,
-                    exchange if transaction_category == "EQUITY" else "NSE",
-                    category
+                    exchange,  # Use the selected exchange
+                    category,
+                    charge_instrument_type  # Pass the instrument type for charges calculation
                 )
                 
                 # Display charges breakdown

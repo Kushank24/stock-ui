@@ -583,7 +583,7 @@ class Charges:
         with tab3:
             render_category_charges('F&O_COMMODITY')
 
-    def calculate_charges(self, transaction_amount: float, transaction_type: str, exchange: str = 'NSE', category: str = 'EQUITY') -> Tuple[Dict[str, float], float]:
+    def calculate_charges(self, transaction_amount: float, transaction_type: str, exchange: str = 'NSE', category: str = 'EQUITY', instrument_type: str = 'EQUITY') -> Tuple[Dict[str, float], float]:
         """
         Calculate all applicable charges for a transaction amount based on transaction type, exchange, and category
         
@@ -592,6 +592,7 @@ class Charges:
             transaction_type: Type of transaction (BUY, SELL, IPO, BONUS, RIGHT, BUYBACK, DEMERGER, MERGER)
             exchange: Exchange where transaction was made (NSE or BSE)
             category: Transaction category (EQUITY, F&O_EQUITY, F&O_COMMODITY)
+            instrument_type: Type of instrument (EQUITY, FUT, OPT)
             
         Returns:
             Tuple containing:
@@ -604,10 +605,10 @@ class Charges:
                 """
                 SELECT charge_type, exchange, category, instrument_type, transaction_type, value 
                 FROM charges 
-                WHERE exchange = ? AND category = ? AND instrument_type = ?
+                WHERE exchange = ? AND category = ? AND instrument_type = ? AND transaction_type = ?
                 """,
                 conn,
-                params=(exchange, category, 'EQUITY' if category == 'EQUITY' else 'FUT')
+                params=(exchange, category, instrument_type, transaction_type)
             )
         
         # Convert charges DataFrame to dictionary
@@ -620,7 +621,7 @@ class Charges:
         
         # Helper function to calculate GST
         def calculate_gst(base_charges):
-            return sum(base_charges) * charge_rates.get(('GST', 'BUY'), 0)
+            return sum(base_charges) * charge_rates.get(('GST', transaction_type), 0)
         
         # Helper function to calculate DP charges with minimum threshold (for SELL only)
         def calculate_dp_charges_sell(amount):
@@ -632,7 +633,7 @@ class Charges:
             return amount * charge_rates.get(('DP_CHARGES', 'BUY'), 0)
         
         # Initialize all charges to 0
-        for charge_type in ['BROKERAGE', 'DP_CHARGES', 'TRANSACTION_CHARGES', 'STT', 'STAMP_CHARGES', 'SEBI', 'IPFT', 'GST']:
+        for charge_type in ['BROKERAGE', 'DP_CHARGES', 'TRANSACTION_CHARGES', 'STT', 'CTT', 'STAMP_CHARGES', 'SEBI', 'IPFT', 'GST']:
             charges[charge_type] = 0
         
         # Calculate charges based on transaction type
@@ -647,8 +648,11 @@ class Charges:
             # Transaction Charges
             charges['TRANSACTION_CHARGES'] = transaction_amount * charge_rates.get(('TRANSACTION_CHARGES', 'BUY'), 0)
             
-            # STT
-            charges['STT'] = transaction_amount * charge_rates.get(('STT', 'BUY'), 0)
+            # STT/CTT based on category
+            if category == 'F&O_COMMODITY':
+                charges['CTT'] = transaction_amount * charge_rates.get(('CTT', 'BUY'), 0)
+            else:
+                charges['STT'] = transaction_amount * charge_rates.get(('STT', 'BUY'), 0)
             
             # Stamp Charges (only for BUY)
             charges['STAMP_CHARGES'] = transaction_amount * charge_rates.get(('STAMP_CHARGES', 'BUY'), 0)
@@ -683,8 +687,11 @@ class Charges:
             # Transaction Charges
             charges['TRANSACTION_CHARGES'] = transaction_amount * charge_rates.get(('TRANSACTION_CHARGES', 'BUY'), 0)
             
-            # STT
-            charges['STT'] = transaction_amount * charge_rates.get(('STT', 'BUY'), 0)
+            # STT/CTT based on category
+            if category == 'F&O_COMMODITY':
+                charges['CTT'] = transaction_amount * charge_rates.get(('CTT', 'BUY'), 0)
+            else:
+                charges['STT'] = transaction_amount * charge_rates.get(('STT', 'BUY'), 0)
             
             # Stamp Charges (for DEMERGER)
             charges['STAMP_CHARGES'] = transaction_amount * charge_rates.get(('STAMP_CHARGES', 'BUY'), 0)
@@ -716,8 +723,11 @@ class Charges:
             # Transaction Charges
             charges['TRANSACTION_CHARGES'] = transaction_amount * charge_rates.get(('TRANSACTION_CHARGES', 'SELL'), 0)
             
-            # STT
-            charges['STT'] = transaction_amount * charge_rates.get(('STT', 'SELL'), 0)
+            # STT/CTT based on category
+            if category == 'F&O_COMMODITY':
+                charges['CTT'] = transaction_amount * charge_rates.get(('CTT', 'SELL'), 0)
+            else:
+                charges['STT'] = transaction_amount * charge_rates.get(('STT', 'SELL'), 0)
             
             # Stamp Charges (0 for SELL)
             charges['STAMP_CHARGES'] = 0
@@ -751,8 +761,11 @@ class Charges:
             # Transaction Charges
             charges['TRANSACTION_CHARGES'] = transaction_amount * charge_rates.get(('TRANSACTION_CHARGES', 'SELL'), 0)
             
-            # STT
-            charges['STT'] = transaction_amount * charge_rates.get(('STT', 'SELL'), 0)
+            # STT/CTT based on category
+            if category == 'F&O_COMMODITY':
+                charges['CTT'] = transaction_amount * charge_rates.get(('CTT', 'SELL'), 0)
+            else:
+                charges['STT'] = transaction_amount * charge_rates.get(('STT', 'SELL'), 0)
             
             # Stamp Charges (0 for BUYBACK)
             charges['STAMP_CHARGES'] = 0

@@ -12,6 +12,22 @@ A comprehensive stock transaction management system built with Python and Stream
 - Consolidated portfolio view across all accounts
 - Individual charge configuration per account
 
+https://github.com/user-attachments/assets/9b6c8d45-647a-4dd1-a88a-6ce5289018d5
+
+
+
+https://github.com/user-attachments/assets/9b6c8d45-647a-4dd1-a88a-6ce5289018d5
+
+
+
+https://github.com/user-attachments/assets/9951f7a9-2f7f-4c7f-aab6-fec7c9733a61
+
+
+
+https://github.com/user-attachments/assets/9951f7a9-2f7f-4c7f-aab6-fec7c9733a61
+
+
+
 ### 2. Broker Integration
 - Support for broker API integration for automated trade synchronization
 - Compatible with broker APIs that follow standard protocols

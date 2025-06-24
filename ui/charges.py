@@ -134,6 +134,70 @@ class Charges:
                     ('IPFT', 'BSE', 'F&O_EQUITY', 'OPT', 'SELL', 0.0000),  # 0%
                     ('GST', 'BSE', 'F&O_EQUITY', 'OPT', 'BUY', 0.18),  # 18%
                     ('GST', 'BSE', 'F&O_EQUITY', 'OPT', 'SELL', 0.18),  # 18%
+                    
+                    # F&O Commodity MCX charges - Futures
+                    ('BROKERAGE', 'MCX', 'F&O_COMMODITY', 'FUT', 'BUY', 20.00),  # ₹20 per lot
+                    ('BROKERAGE', 'MCX', 'F&O_COMMODITY', 'FUT', 'SELL', 20.00),  # ₹20 per lot
+                    ('TRANSACTION_CHARGES', 'MCX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.0000297),  # 0.00297%
+                    ('TRANSACTION_CHARGES', 'MCX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.0000297),  # 0.00297%
+                    ('CTT', 'MCX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.001),  # 0.1% (CTT instead of STT)
+                    ('CTT', 'MCX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.001),  # 0.1% (CTT instead of STT)
+                    ('STAMP_CHARGES', 'MCX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.00015),  # 0.015%
+                    ('STAMP_CHARGES', 'MCX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.00015),  # 0.015%
+                    ('SEBI', 'MCX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.000001),  # 0.0001%
+                    ('SEBI', 'MCX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.000001),  # 0.0001%
+                    ('IPFT', 'MCX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.000001),  # 0.0001%
+                    ('IPFT', 'MCX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.000001),  # 0.0001%
+                    ('GST', 'MCX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.18),  # 18%
+                    ('GST', 'MCX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.18),  # 18%
+                    
+                    # F&O Commodity MCX charges - Options
+                    ('BROKERAGE', 'MCX', 'F&O_COMMODITY', 'OPT', 'BUY', 20.00),  # ₹20 per lot
+                    ('BROKERAGE', 'MCX', 'F&O_COMMODITY', 'OPT', 'SELL', 20.00),  # ₹20 per lot
+                    ('TRANSACTION_CHARGES', 'MCX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.0000297),  # 0.00297%
+                    ('TRANSACTION_CHARGES', 'MCX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.0000297),  # 0.00297%
+                    ('CTT', 'MCX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.001),  # 0.1% (CTT instead of STT)
+                    ('CTT', 'MCX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.001),  # 0.1% (CTT instead of STT)
+                    ('STAMP_CHARGES', 'MCX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.00015),  # 0.015%
+                    ('STAMP_CHARGES', 'MCX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.00015),  # 0.015%
+                    ('SEBI', 'MCX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.000001),  # 0.0001%
+                    ('SEBI', 'MCX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.000001),  # 0.0001%
+                    ('IPFT', 'MCX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.000001),  # 0.0001%
+                    ('IPFT', 'MCX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.000001),  # 0.0001%
+                    ('GST', 'MCX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.18),  # 18%
+                    ('GST', 'MCX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.18),  # 18%
+                    
+                    # F&O Commodity NCDEX charges - Futures
+                    ('BROKERAGE', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'BUY', 20.00),  # ₹20 per lot
+                    ('BROKERAGE', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'SELL', 20.00),  # ₹20 per lot
+                    ('TRANSACTION_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.0000297),  # 0.00297%
+                    ('TRANSACTION_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.0000297),  # 0.00297%
+                    ('CTT', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.001),  # 0.1% (CTT instead of STT)
+                    ('CTT', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.001),  # 0.1% (CTT instead of STT)
+                    ('STAMP_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.00015),  # 0.015%
+                    ('STAMP_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.00015),  # 0.015%
+                    ('SEBI', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.000001),  # 0.0001%
+                    ('SEBI', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.000001),  # 0.0001%
+                    ('IPFT', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.000001),  # 0.0001%
+                    ('IPFT', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.000001),  # 0.0001%
+                    ('GST', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'BUY', 0.18),  # 18%
+                    ('GST', 'NCDEX', 'F&O_COMMODITY', 'FUT', 'SELL', 0.18),  # 18%
+                    
+                    # F&O Commodity NCDEX charges - Options
+                    ('BROKERAGE', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'BUY', 20.00),  # ₹20 per lot
+                    ('BROKERAGE', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'SELL', 20.00),  # ₹20 per lot
+                    ('TRANSACTION_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.0000297),  # 0.00297%
+                    ('TRANSACTION_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.0000297),  # 0.00297%
+                    ('CTT', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.001),  # 0.1% (CTT instead of STT)
+                    ('CTT', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.001),  # 0.1% (CTT instead of STT)
+                    ('STAMP_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.00015),  # 0.015%
+                    ('STAMP_CHARGES', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.00015),  # 0.015%
+                    ('SEBI', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.000001),  # 0.0001%
+                    ('SEBI', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.000001),  # 0.0001%
+                    ('IPFT', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.000001),  # 0.0001%
+                    ('IPFT', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.000001),  # 0.0001%
+                    ('GST', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'BUY', 0.18),  # 18%
+                    ('GST', 'NCDEX', 'F&O_COMMODITY', 'OPT', 'SELL', 0.18),  # 18%
                 ]
                 
                 for charge_type, exchange, category, instrument_type, transaction_type, value in default_charges:

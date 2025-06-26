@@ -12,6 +12,9 @@ class TransactionHistory:
         st.title("Transaction History")
         df = self.get_transactions(demat_account_id)
         if not df.empty:
+            # Convert date column to datetime for proper filtering
+            df['date'] = pd.to_datetime(df['date']).dt.date
+            
             # Add filters
             st.subheader("Filters")
             col1, col2, col3 = st.columns(3)

@@ -11,6 +11,42 @@ class TransactionForm:
         self.db_manager = db_manager
         self.portfolio_manager = PortfolioManager(db_manager)
         self.charges = Charges(db_manager)
+    
+    def get_current_financial_year(self) -> str:
+        """
+        Determine the current financial year based on the current date.
+        Financial year in India runs from April 1 to March 31.
+        """
+        current_date = datetime.now()
+        current_year = current_date.year
+        
+        # If current month is April (4) or later, we're in the financial year that started in April
+        # If current month is before April, we're in the financial year that started in previous year's April
+        if current_date.month >= 4:
+            fy_start_year = current_year
+        else:
+            fy_start_year = current_year - 1
+        
+        return f"{fy_start_year}-{fy_start_year + 1}"
+    
+    def get_financial_year_options(self) -> tuple:
+        """
+        Generate financial year options including current year and past 5 years.
+        Returns tuple of (options_list, current_year_index)
+        """
+        current_fy = self.get_current_financial_year()
+        current_fy_start = int(current_fy.split('-')[0])
+        
+        # Generate list of financial years: current + past 5 years
+        financial_years = []
+        for i in range(6):  # 0 to 5 (current + 5 past years)
+            year = current_fy_start - i
+            financial_years.append(f"{year}-{year + 1}")
+        
+        # Find the index of current financial year (should be 0)
+        current_year_index = 0
+        
+        return financial_years, current_year_index
 
     def render(self, demat_account_id: int):
         st.title("Add New Transaction")
@@ -30,12 +66,13 @@ class TransactionForm:
         
         # Create a form for transaction details
         with st.form("transaction_form"):
-            # Financial Year
-            current_year = datetime.now().year
+            # Financial Year - Dynamic generation based on current date
+            financial_year_options, current_year_index = self.get_financial_year_options()
             financial_year = st.selectbox(
                 "Financial Year",
-                [f"{year}-{year+1}" for year in range(current_year-1, current_year+1)],
-                index=1
+                financial_year_options,
+                index=current_year_index,
+                help="Financial Year runs from April 1 to March 31. Current financial year is automatically selected."
             )
             
             # Transaction Date

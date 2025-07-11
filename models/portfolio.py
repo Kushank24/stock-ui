@@ -42,7 +42,7 @@ class PortfolioManager:
             
             # Calculate charges for the transaction
             base_amount = quantity * price
-            if trans_type in ['BUY', 'SELL'] or category == 'EQUITY':
+            if trans_type in ['BUY', 'SELL', 'BUYBACK'] or category == 'EQUITY':
                 # Convert category to match charges table format
                 charge_category = category.replace(" ", "_")
                 
@@ -76,19 +76,63 @@ class PortfolioManager:
                 portfolio[scrip] = PortfolioItem(scrip, 0, 0.0, 0.0)
 
             if trans_type == 'BUY':
-                # For BUY transactions, update average price and quantity
-                current_total = portfolio[scrip].quantity * portfolio[scrip].average_price
-                new_total = quantity * effective_price
-                new_quantity = portfolio[scrip].quantity + quantity
+                # For BUY transactions, handle both regular buys and covering short positions
+                current_quantity = portfolio[scrip].quantity
+                current_avg_price = portfolio[scrip].average_price
                 
-                if new_quantity != 0:  # Avoid division by zero
+                if current_quantity == 0:
+                    # This is a regular buy into empty position
+                    portfolio[scrip].quantity = quantity
+                    portfolio[scrip].average_price = effective_price
+                elif current_quantity > 0:
+                    # This is adding to an existing long position
+                    current_total = current_quantity * current_avg_price
+                    new_total = quantity * effective_price
+                    new_quantity = current_quantity + quantity
+                    
                     portfolio[scrip].average_price = (current_total + new_total) / new_quantity
-                portfolio[scrip].quantity = new_quantity
+                    portfolio[scrip].quantity = new_quantity
+                else:
+                    # This is covering a short position (current_quantity < 0)
+                    new_quantity = current_quantity + quantity
+                    
+                    if new_quantity == 0:
+                        # Short position completely closed
+                        portfolio[scrip].quantity = 0
+                        # Keep the average price as is for record keeping
+                    elif new_quantity < 0:
+                        # Still short after partial cover
+                        portfolio[scrip].quantity = new_quantity
+                        # Average price remains the same (original short price)
+                    else:
+                        # Overcovered - now long position
+                        remaining_buy_quantity = new_quantity
+                        portfolio[scrip].quantity = remaining_buy_quantity
+                        portfolio[scrip].average_price = effective_price
+
+            elif trans_type in ['SELL', 'BUYBACK']:
+                # For SELL and BUYBACK transactions, handle both regular sells and short sells
+                current_quantity = portfolio[scrip].quantity
+                current_avg_price = portfolio[scrip].average_price
                 
-            elif trans_type == 'SELL':
-                # For SELL transactions, just reduce quantity
-                portfolio[scrip].quantity -= quantity
-                
+                if current_quantity == 0:
+                    # This is a short sell (selling before buying)
+                    portfolio[scrip].quantity = -quantity
+                    portfolio[scrip].average_price = effective_price
+                elif current_quantity > 0:
+                    # This is a regular sell from existing position
+                    portfolio[scrip].quantity -= quantity
+                    # Average price remains the same for regular sells
+                else:
+                    # This is adding to an existing short position
+                    current_total = current_quantity * current_avg_price
+                    new_total = -quantity * effective_price
+                    new_quantity = current_quantity - quantity
+                    
+                    if new_quantity != 0:
+                        portfolio[scrip].average_price = (current_total + new_total) / new_quantity
+                    portfolio[scrip].quantity = new_quantity
+
             elif trans_type == 'BONUS':
                 # For BONUS transactions, add quantity and recalculate average price
                 current_total = portfolio[scrip].quantity * portfolio[scrip].average_price

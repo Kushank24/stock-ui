@@ -663,6 +663,9 @@ class Charges:
             - Dictionary of charges with their amounts
             - Total charges
         """
+        # For BUYBACK, use SELL rates since they have the same charge structure
+        lookup_transaction_type = 'SELL' if transaction_type == 'BUYBACK' else transaction_type
+        
         # Force a fresh read from the database each time
         with sqlite3.connect(self.db_manager.db_name) as conn:
             charges_df = pd.read_sql_query(
@@ -672,7 +675,7 @@ class Charges:
                 WHERE exchange = ? AND category = ? AND instrument_type = ? AND transaction_type = ?
                 """,
                 conn,
-                params=(exchange, category, instrument_type, transaction_type)
+                params=(exchange, category, instrument_type, lookup_transaction_type)
             )
         
         # Convert charges DataFrame to dictionary
@@ -680,21 +683,21 @@ class Charges:
         for _, row in charges_df.iterrows():
             key = (row['charge_type'], row['transaction_type'])
             charge_rates[key] = row['value']
-        
+
         charges = {}
         
         # Helper function to calculate GST
         def calculate_gst(base_charges):
-            return sum(base_charges) * charge_rates.get(('GST', transaction_type), 0)
+            return sum(base_charges) * charge_rates.get(('GST', lookup_transaction_type), 0)
         
         # Helper function to calculate DP charges with minimum threshold (for SELL only)
         def calculate_dp_charges_sell(amount):
-            dp_charge = amount * charge_rates.get(('DP_CHARGES', 'SELL'), 0)
+            dp_charge = amount * charge_rates.get(('DP_CHARGES', lookup_transaction_type), 0)
             return max(dp_charge, 20.0) if dp_charge > 0 else 0
         
         # Helper function to calculate DP charges without minimum threshold (for BUY)
         def calculate_dp_charges_buy(amount):
-            return amount * charge_rates.get(('DP_CHARGES', 'BUY'), 0)
+            return amount * charge_rates.get(('DP_CHARGES', lookup_transaction_type), 0)
         
         # Initialize all charges to 0
         for charge_type in ['BROKERAGE', 'DP_CHARGES', 'TRANSACTION_CHARGES', 'STT', 'CTT', 'STAMP_CHARGES', 'SEBI', 'IPFT', 'GST']:
@@ -816,30 +819,30 @@ class Charges:
         elif transaction_type == 'BUYBACK':
             # For BUYBACK, charges are similar to SELL
             # Brokerage is 0
-            charges['BROKERAGE'] = charge_rates.get(('BROKERAGE', 'SELL'), 0)
+            charges['BROKERAGE'] = charge_rates.get(('BROKERAGE', lookup_transaction_type), 0)
             
             # DP Charges with minimum threshold (0.04% or ₹20, whichever is higher)
             if category == 'EQUITY':
                 charges['DP_CHARGES'] = calculate_dp_charges_sell(transaction_amount)
             
             # Transaction Charges
-            charges['TRANSACTION_CHARGES'] = transaction_amount * charge_rates.get(('TRANSACTION_CHARGES', 'SELL'), 0)
+            charges['TRANSACTION_CHARGES'] = transaction_amount * charge_rates.get(('TRANSACTION_CHARGES', lookup_transaction_type), 0)
             
             # STT/CTT based on category
             if category == 'F&O_COMMODITY':
-                charges['CTT'] = transaction_amount * charge_rates.get(('CTT', 'SELL'), 0)
+                charges['CTT'] = transaction_amount * charge_rates.get(('CTT', lookup_transaction_type), 0)
             else:
-                charges['STT'] = transaction_amount * charge_rates.get(('STT', 'SELL'), 0)
+                charges['STT'] = transaction_amount * charge_rates.get(('STT', lookup_transaction_type), 0)
             
             # Stamp Charges (0 for BUYBACK)
             charges['STAMP_CHARGES'] = 0
             
             # SEBI
-            charges['SEBI'] = transaction_amount * charge_rates.get(('SEBI', 'SELL'), 0)
+            charges['SEBI'] = transaction_amount * charge_rates.get(('SEBI', lookup_transaction_type), 0)
             
             # IPFT (only for NSE)
             if exchange == 'NSE':
-                charges['IPFT'] = transaction_amount * charge_rates.get(('IPFT', 'SELL'), 0)
+                charges['IPFT'] = transaction_amount * charge_rates.get(('IPFT', lookup_transaction_type), 0)
             else:
                 charges['IPFT'] = 0
             

@@ -35,30 +35,31 @@ class ProfitLoss:
             self._render_fno_pnl(transactions_df)
 
     def _render_equity_pnl(self, transactions_df):
-        # Filter only SELL transactions
-        sell_transactions = transactions_df[transactions_df['transaction_type'] == 'SELL']
+        # Filter SELL and BUYBACK transactions (both generate P&L)
+        sell_transactions = transactions_df[transactions_df['transaction_type'].isin(['SELL', 'BUYBACK'])]
         
         if sell_transactions.empty:
-            st.info("No sell transactions found")
+            st.info("No sell or buyback transactions found")
             return
 
         # Create a list to store P&L data
         pnl_data = []
         charges = Charges(self.db_manager)
 
-        # For each sell transaction, find matching buy transactions
+        # For each sell/buyback transaction, find matching buy transactions
         for _, sell_row in sell_transactions.iterrows():
             scrip = sell_row['scrip_name']
             sell_shares = sell_row['num_shares']
             sell_date = pd.to_datetime(sell_row['date']).date()  # Convert to date
             sell_price = sell_row['rate']
+            transaction_type = sell_row['transaction_type']  # Get actual transaction type
             exchange = sell_row.get('exchange', 'NSE')  # Default to NSE if not specified
             
-            # Calculate sell charges
+            # Calculate sell charges (use appropriate transaction type for charges)
             sell_base_amount = sell_shares * sell_price
             sell_charges_details, sell_total_charges = charges.calculate_charges(
                 sell_base_amount,
-                'SELL',
+                transaction_type,  # Use actual transaction type (SELL or BUYBACK)
                 exchange,
                 'EQUITY',
                 'EQUITY'
@@ -74,7 +75,7 @@ class ProfitLoss:
 
             remaining_sell_shares = sell_shares
             
-            # Match buy transactions with sell
+            # Match buy transactions with sell/buyback
             for _, buy_row in buy_transactions.iterrows():
                 if remaining_sell_shares <= 0:
                     break
@@ -114,7 +115,8 @@ class ProfitLoss:
                     'PURCHASE_DATE': buy_date,
                     'PURCHASE_PRICE': effective_buy_price,
                     'PROFIT_LOSS': profit_loss,
-                    'TERM_TYPE': term_type
+                    'TERM_TYPE': term_type,
+                    'TRANSACTION_TYPE': transaction_type  # Add this to distinguish SELL from BUYBACK
                 })
                 
                 remaining_sell_shares -= shares_to_match
@@ -291,6 +293,13 @@ class ProfitLoss:
                     return 'background-color: #87CEEB'  # Sky blue
                 return ''
 
+            def style_transaction_type(val):
+                if val == 'SELL':
+                    return 'background-color: #F44336'  # Material Red
+                elif val == 'BUYBACK':
+                    return 'background-color: #E57373'  # Light Material Red
+                return ''
+
             # Apply styling
             styled_df = display_df.style.applymap(
                 style_profit_loss,
@@ -299,6 +308,13 @@ class ProfitLoss:
                 style_term_type,
                 subset=['TERM_TYPE']
             )
+            
+            # Only apply transaction type styling if the column exists
+            if 'TRANSACTION_TYPE' in display_df.columns:
+                styled_df = styled_df.applymap(
+                    style_transaction_type,
+                    subset=['TRANSACTION_TYPE']
+                )
             
             # Display the table
             st.dataframe(
@@ -316,6 +332,10 @@ class ProfitLoss:
                     "PROFIT_LOSS": st.column_config.NumberColumn(
                         "Profit/Loss",
                         format="₹%.2f"
+                    ),
+                    "TRANSACTION_TYPE": st.column_config.TextColumn(
+                        "Transaction Type",
+                        help="SELL: Regular sell transaction, BUYBACK: Company buyback"
                     )
                 }
             )

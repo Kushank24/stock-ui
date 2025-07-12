@@ -212,6 +212,84 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error deleting transaction: {e}")
             return False
+    
+    def update_transaction(self, old_financial_year: str, old_serial_number: int, old_scrip_name: str, 
+                          old_date, updated_transaction: Transaction) -> bool:
+        """Update an existing transaction in the database"""
+        try:
+            with sqlite3.connect(self.db_name, detect_types=sqlite3.PARSE_DECLTYPES) as conn:
+                cursor = conn.cursor()
+                
+                # Convert old_date to string for WHERE clause (database stores dates as strings)
+                if hasattr(old_date, 'strftime'):
+                    old_date_str = old_date.strftime('%Y-%m-%d')
+                elif hasattr(old_date, 'to_pydatetime'):
+                    old_date_str = old_date.to_pydatetime().strftime('%Y-%m-%d')
+                elif hasattr(old_date, 'date'):
+                    old_date_str = old_date.date().strftime('%Y-%m-%d')
+                else:
+                    old_date_str = str(old_date)
+                
+                # Convert updated transaction date to string for SET clause
+                updated_date = updated_transaction.date
+                if hasattr(updated_date, 'strftime'):
+                    updated_date_str = updated_date.strftime('%Y-%m-%d')
+                elif hasattr(updated_date, 'to_pydatetime'):
+                    updated_date_str = updated_date.to_pydatetime().strftime('%Y-%m-%d')
+                elif hasattr(updated_date, 'date'):
+                    updated_date_str = updated_date.date().strftime('%Y-%m-%d')
+                else:
+                    updated_date_str = str(updated_date)
+                
+                # Convert expiry date if present
+                updated_expiry = updated_transaction.expiry_date
+                updated_expiry_str = None
+                if updated_expiry:
+                    if hasattr(updated_expiry, 'strftime'):
+                        updated_expiry_str = updated_expiry.strftime('%Y-%m-%d')
+                    elif hasattr(updated_expiry, 'to_pydatetime'):
+                        updated_expiry_str = updated_expiry.to_pydatetime().strftime('%Y-%m-%d')
+                    elif hasattr(updated_expiry, 'date'):
+                        updated_expiry_str = updated_expiry.date().strftime('%Y-%m-%d')
+                    else:
+                        updated_expiry_str = str(updated_expiry)
+                
+                cursor.execute('''
+                    UPDATE transactions 
+                    SET financial_year = ?, serial_number = ?, scrip_name = ?, date = ?,
+                        num_shares = ?, rate = ?, amount = ?, transaction_type = ?,
+                        demat_account_id = ?, transaction_category = ?, expiry_date = ?,
+                        instrument_type = ?, strike_price = ?, old_scrip_name = ?, exchange = ?
+                    WHERE financial_year = ? 
+                    AND serial_number = ? 
+                    AND scrip_name = ? 
+                    AND date = ?
+                ''', (
+                    updated_transaction.financial_year,
+                    updated_transaction.serial_number,
+                    updated_transaction.scrip_name,
+                    updated_date_str,
+                    updated_transaction.num_shares,
+                    updated_transaction.rate,
+                    updated_transaction.amount,
+                    updated_transaction.transaction_type,
+                    updated_transaction.demat_account_id,
+                    updated_transaction.transaction_category,
+                    updated_expiry_str,
+                    updated_transaction.instrument_type,
+                    updated_transaction.strike_price,
+                    updated_transaction.old_scrip_name,
+                    updated_transaction.exchange,
+                    old_financial_year,
+                    old_serial_number,
+                    old_scrip_name,
+                    old_date_str
+                ))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error updating transaction: {e}")
+            return False
 
     def add_transaction(self, financial_year: str, serial_number: int, scrip_name: str, 
                        date: datetime, transaction_type: str, num_shares: int, 

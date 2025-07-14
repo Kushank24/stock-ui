@@ -44,7 +44,6 @@ class ProfitLoss:
 
         # Create a list to store P&L data
         pnl_data = []
-        charges = Charges(self.db_manager)
 
         # For each sell/buyback transaction, find matching buy transactions
         for _, sell_row in sell_transactions.iterrows():
@@ -55,46 +54,32 @@ class ProfitLoss:
             transaction_type = sell_row['transaction_type']  # Get actual transaction type
             exchange = sell_row.get('exchange', 'NSE')  # Default to NSE if not specified
             
-            # Calculate sell charges (use appropriate transaction type for charges)
-            sell_base_amount = sell_shares * sell_price
-            sell_charges_details, sell_total_charges = charges.calculate_charges(
-                sell_base_amount,
-                transaction_type,  # Use actual transaction type (SELL or BUYBACK)
-                exchange,
-                'EQUITY',
-                'EQUITY'
-            )
-            effective_sell_price = sell_price - (sell_total_charges / sell_shares)
+            # Use the stored amount directly (charges already included/excluded during transaction entry)
+            sell_amount = sell_row['amount']
+            effective_sell_price = sell_amount / sell_shares
             
-            # Get all buy transactions for this scrip before the sell date
+            # Get all transactions that add shares to portfolio for this scrip before the sell date
+            # Include BUY, IPO, BONUS, RIGHT, and DEMERGER transactions
             buy_transactions = transactions_df[
                 (transactions_df['scrip_name'] == scrip) &
-                (transactions_df['transaction_type'] == 'BUY') &
+                (transactions_df['transaction_type'].isin(['BUY', 'IPO', 'BONUS', 'RIGHT', 'DEMERGER'])) &
                 (pd.to_datetime(transactions_df['date']).dt.date <= sell_date)  # Convert to date for comparison
             ].sort_values('date')
 
             remaining_sell_shares = sell_shares
             
-            # Match buy transactions with sell/buyback
+            # Match acquisition transactions (BUY, IPO, BONUS, RIGHT, DEMERGER) with sell/buyback
             for _, buy_row in buy_transactions.iterrows():
                 if remaining_sell_shares <= 0:
                     break
                     
                 buy_shares = buy_row['num_shares']
                 buy_date = pd.to_datetime(buy_row['date']).date()  # Convert to date
-                buy_price = buy_row['rate']
-                buy_exchange = buy_row.get('exchange', 'NSE')  # Default to NSE if not specified
+                buy_transaction_type = buy_row['transaction_type']
                 
-                # Calculate buy charges
-                buy_base_amount = buy_shares * buy_price
-                buy_charges_details, buy_total_charges = charges.calculate_charges(
-                    buy_base_amount,
-                    'BUY',
-                    buy_exchange,
-                    'EQUITY',
-                    'EQUITY'
-                )
-                effective_buy_price = buy_price + (buy_total_charges / buy_shares)
+                # Use the stored amount directly (charges already included/excluded during transaction entry)
+                buy_amount = buy_row['amount']
+                effective_buy_price = buy_amount / buy_shares
                 
                 # Calculate shares to match
                 shares_to_match = min(remaining_sell_shares, buy_shares)
@@ -114,6 +99,7 @@ class ProfitLoss:
                     'PURCHASE_SHARES': shares_to_match,
                     'PURCHASE_DATE': buy_date,
                     'PURCHASE_PRICE': effective_buy_price,
+                    'PURCHASE_TYPE': buy_transaction_type,  # Add this to show acquisition type
                     'PROFIT_LOSS': profit_loss,
                     'TERM_TYPE': term_type,
                     'TRANSACTION_TYPE': transaction_type  # Add this to distinguish SELL from BUYBACK
@@ -300,6 +286,16 @@ class ProfitLoss:
                     return 'background-color: #E57373'  # Light Material Red
                 return ''
 
+            def style_purchase_type(val):
+                color_map = {
+                    'BUY': 'background-color: #4CAF50',  # Material Green
+                    'IPO': 'background-color: #81C784',  # Light Material Green
+                    'BONUS': 'background-color: #81C784',  # Light Material Green
+                    'RIGHT': 'background-color: #81C784',  # Light Material Green
+                    'DEMERGER': 'background-color: #2196F3'  # Material Blue
+                }
+                return color_map.get(val, '')
+
             # Apply styling
             styled_df = display_df.style.applymap(
                 style_profit_loss,
@@ -314,6 +310,13 @@ class ProfitLoss:
                 styled_df = styled_df.applymap(
                     style_transaction_type,
                     subset=['TRANSACTION_TYPE']
+                )
+            
+            # Apply purchase type styling if the column exists
+            if 'PURCHASE_TYPE' in display_df.columns:
+                styled_df = styled_df.applymap(
+                    style_purchase_type,
+                    subset=['PURCHASE_TYPE']
                 )
             
             # Display the table
@@ -333,6 +336,10 @@ class ProfitLoss:
                         "Profit/Loss",
                         format="₹%.2f"
                     ),
+                    "PURCHASE_TYPE": st.column_config.TextColumn(
+                        "Purchase Type",
+                        help="BUY: Regular purchase, IPO: IPO allocation, BONUS: Bonus shares, RIGHT: Rights subscription, DEMERGER: Demerger allocation"
+                    ),
                     "TRANSACTION_TYPE": st.column_config.TextColumn(
                         "Transaction Type",
                         help="SELL: Regular sell transaction, BUYBACK: Company buyback"
@@ -344,4 +351,4 @@ class ProfitLoss:
             total_profit = display_df['PROFIT_LOSS'].sum()
             st.subheader(f"Total Profit/Loss: ₹{total_profit:,.2f}")
         else:
-            st.info("No matching buy transactions found for sell transactions")
+            st.info("No matching acquisition transactions (BUY, IPO, BONUS, RIGHT, DEMERGER) found for sell transactions")

@@ -136,8 +136,13 @@ class PortfolioManager:
                             if self._is_finite_safe(bonus_calculation):
                                 bonus_for_lot = int(bonus_calculation)
                                 if bonus_for_lot > 0:
-                                    # Add bonus shares to existing lot (don't create new lot)
+                                    # Calculate the total cost of the existing lot
+                                    original_cost = lot.quantity * lot.price
+                                    # Add bonus shares to existing lot
                                     lot.quantity += bonus_for_lot
+                                    # Recalculate average price: original_cost / new_total_quantity
+                                    # Since bonus shares are free, only original cost is divided by new quantity
+                                    lot.price = original_cost / lot.quantity
                 else:
                     # No existing lots, add as new lot at zero cost (if quantity is finite)
                     if self._is_finite_safe(quantity):

@@ -1,5 +1,6 @@
 import sqlite3
 import pandas as pd
+import math
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Dict, List
@@ -79,6 +80,10 @@ class PortfolioManager:
                     effective_price = price - (total_charges / quantity)
                 else:
                     effective_price = price + (total_charges / quantity)
+                
+                # Ensure effective_price is finite, fallback to original price if not
+                if not math.isfinite(effective_price):
+                    effective_price = price
             else:
                 effective_price = price
 
@@ -96,16 +101,17 @@ class PortfolioManager:
                     short_positions[portfolio_key] += short_cover
                     remaining_quantity = quantity - short_cover
                     
-                    if remaining_quantity > 0:
+                    if remaining_quantity > 0 and math.isfinite(remaining_quantity) and math.isfinite(effective_price):
                         # Add remaining quantity as new lot
                         purchase_lots[portfolio_key].append(
-                            PurchaseLot(date, remaining_quantity, effective_price, trans_type)
+                            PurchaseLot(date, int(remaining_quantity), effective_price, trans_type)
                         )
                 else:
-                    # Add as new purchase lot
-                    purchase_lots[portfolio_key].append(
-                        PurchaseLot(date, quantity, effective_price, trans_type)
-                    )
+                    # Add as new purchase lot (if values are finite)
+                    if math.isfinite(quantity) and math.isfinite(effective_price):
+                        purchase_lots[portfolio_key].append(
+                            PurchaseLot(date, int(quantity), effective_price, trans_type)
+                        )
 
             elif trans_type == 'BONUS':
                 # Bonus shares are free - add to existing lots proportionally
@@ -114,17 +120,24 @@ class PortfolioManager:
                     if total_existing_qty > 0:
                         # Add bonus shares proportionally to existing lots
                         for lot in purchase_lots[portfolio_key]:
-                            bonus_for_lot = int((lot.quantity / total_existing_qty) * quantity)
-                            if bonus_for_lot > 0:
-                                # Create new lot for bonus shares at zero cost
-                                purchase_lots[portfolio_key].append(
-                                    PurchaseLot(date, bonus_for_lot, 0.0, trans_type)
-                                )
+                            # Check for infinity values before calculation
+                            if not math.isfinite(lot.quantity) or not math.isfinite(total_existing_qty) or not math.isfinite(quantity):
+                                continue
+                            
+                            bonus_calculation = (lot.quantity / total_existing_qty) * quantity
+                            if math.isfinite(bonus_calculation):
+                                bonus_for_lot = int(bonus_calculation)
+                                if bonus_for_lot > 0:
+                                    # Create new lot for bonus shares at zero cost
+                                    purchase_lots[portfolio_key].append(
+                                        PurchaseLot(date, bonus_for_lot, 0.0, trans_type)
+                                    )
                 else:
-                    # No existing lots, add as new lot at zero cost
-                    purchase_lots[portfolio_key].append(
-                        PurchaseLot(date, quantity, 0.0, trans_type)
-                    )
+                    # No existing lots, add as new lot at zero cost (if quantity is finite)
+                    if math.isfinite(quantity):
+                        purchase_lots[portfolio_key].append(
+                            PurchaseLot(date, int(quantity), 0.0, trans_type)
+                        )
 
             elif trans_type in ['SELL', 'BUYBACK']:
                 # These transactions reduce shares from portfolio (FIFO)
@@ -166,10 +179,11 @@ class PortfolioManager:
                         purchase_lots[old_portfolio_key] = []
                         short_positions[old_portfolio_key] = 0
                 
-                # Add new shares
-                purchase_lots[portfolio_key].append(
-                    PurchaseLot(date, quantity, effective_price, trans_type)
-                )
+                # Add new shares (if values are finite)
+                if math.isfinite(quantity) and math.isfinite(effective_price):
+                    purchase_lots[portfolio_key].append(
+                        PurchaseLot(date, int(quantity), effective_price, trans_type)
+                    )
 
         # Convert to PortfolioItem objects
         portfolio_items = []
@@ -189,8 +203,11 @@ class PortfolioManager:
                     total_value = sum(lot.quantity * lot.price for lot in lots)
                     total_lot_quantity = sum(lot.quantity for lot in lots)
                     
-                    if total_lot_quantity > 0:
+                    if total_lot_quantity > 0 and math.isfinite(total_value) and math.isfinite(total_lot_quantity):
                         avg_price = total_value / total_lot_quantity
+                        # Ensure avg_price is finite
+                        if not math.isfinite(avg_price):
+                            avg_price = 0.0
                     else:
                         avg_price = 0.0
                 else:
@@ -198,23 +215,25 @@ class PortfolioManager:
                     avg_price = 0.0
                     total_value = 0.0
                 
-                if total_quantity > 0:
-                    # Long position
-                    portfolio_items.append(PortfolioItem(
-                        scrip_name=scrip_name,
-                        quantity=int(total_quantity),
-                        average_price=avg_price,
-                        total_value=total_quantity * avg_price,
-                        transaction_category=category.replace('_', ' ')
-                    ))
-                else:
-                    # Short position
-                    portfolio_items.append(PortfolioItem(
-                        scrip_name=scrip_name,
-                        quantity=int(total_quantity),
-                        average_price=avg_price,
-                        total_value=total_quantity * avg_price,
-                        transaction_category=category.replace('_', ' ')
-                    ))
+                # Check if total_quantity is finite before converting to int
+                if math.isfinite(total_quantity) and math.isfinite(avg_price):
+                    if total_quantity > 0:
+                        # Long position
+                        portfolio_items.append(PortfolioItem(
+                            scrip_name=scrip_name,
+                            quantity=int(total_quantity),
+                            average_price=avg_price,
+                            total_value=total_quantity * avg_price,
+                            transaction_category=category.replace('_', ' ')
+                        ))
+                    else:
+                        # Short position
+                        portfolio_items.append(PortfolioItem(
+                            scrip_name=scrip_name,
+                            quantity=int(total_quantity),
+                            average_price=avg_price,
+                            total_value=total_quantity * avg_price,
+                            transaction_category=category.replace('_', ' ')
+                        ))
 
         return portfolio_items

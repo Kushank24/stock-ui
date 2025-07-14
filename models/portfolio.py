@@ -72,7 +72,10 @@ class PortfolioManager:
                     base_amount, trans_type, exchange, charge_category, charge_instrument_type
                 )
                 
-                if trans_type in ['SELL', 'BUYBACK']:
+                # Prevent division by zero - if quantity is 0, use original price
+                if quantity == 0:
+                    effective_price = price
+                elif trans_type in ['SELL', 'BUYBACK']:
                     effective_price = price - (total_charges / quantity)
                 else:
                     effective_price = price + (total_charges / quantity)

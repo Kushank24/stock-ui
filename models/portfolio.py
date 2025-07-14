@@ -7,6 +7,14 @@ from .database import DatabaseManager, Transaction
 from ui.charges import Charges
 
 @dataclass
+class PurchaseLot:
+    """Represents a single purchase lot for FIFO calculation"""
+    date: str
+    quantity: int
+    price: float
+    transaction_type: str
+
+@dataclass
 class PortfolioItem:
     scrip_name: str
     quantity: int
@@ -25,50 +33,45 @@ class PortfolioManager:
             sqlite3.register_converter("DATE", lambda x: datetime.fromisoformat(x.decode()))
             
             df = pd.read_sql_query(
-                "SELECT * FROM transactions WHERE demat_account_id = ? ORDER BY date",
+                "SELECT * FROM transactions WHERE demat_account_id = ? ORDER BY date, scrip_name",
                 conn,
                 params=(demat_account_id,)
             )
 
-        portfolio: Dict[str, PortfolioItem] = {}
+        # Dictionary to store purchase lots for each scrip (FIFO tracking)
+        purchase_lots: Dict[str, List[PurchaseLot]] = {}
+        # Dictionary to store short positions (negative quantities)
+        short_positions: Dict[str, float] = {}
+        
         charges = Charges(self.db_manager)
 
         for _, row in df.iterrows():
             scrip = row['scrip_name']
             quantity = row['num_shares']
             price = row['rate']
-            trans_type = row['transaction_type'].upper()  # Convert to uppercase for comparison
+            trans_type = row['transaction_type'].upper()
             category = row['transaction_category']
-            exchange = row.get('exchange', 'NSE')  # Default to NSE if not specified
+            exchange = row.get('exchange', 'NSE')
+            date = str(row['date'])
             
-            # Create a composite key for scrip + category to handle same scrip in different categories
+            # Create a composite key for scrip + category
             portfolio_key = f"{scrip}_{category}"
             
-            # Calculate charges for the transaction
+            # Calculate effective price (including charges)
             base_amount = quantity * price
             if trans_type in ['BUY', 'SELL', 'BUYBACK'] or category == 'EQUITY':
-                # Convert category to match charges table format
                 charge_category = category.replace(" ", "_")
                 
-                # Map CE/PE to OPT for charges calculation
                 if category in ["F&O EQUITY", "F&O COMMODITY"]:
                     instrument_type = row.get('instrument_type', 'FUT')
-                    if instrument_type in ["CE", "PE"]:
-                        charge_instrument_type = "OPT"
-                    else:
-                        charge_instrument_type = "FUT"
+                    charge_instrument_type = "OPT" if instrument_type in ["CE", "PE"] else "FUT"
                 else:
                     charge_instrument_type = "EQUITY"
                 
                 _, total_charges = charges.calculate_charges(
-                    base_amount,
-                    trans_type,
-                    exchange,
-                    charge_category,
-                    charge_instrument_type
+                    base_amount, trans_type, exchange, charge_category, charge_instrument_type
                 )
                 
-                # Adjust price to include charges
                 if trans_type in ['SELL', 'BUYBACK']:
                     effective_price = price - (total_charges / quantity)
                 else:
@@ -76,201 +79,139 @@ class PortfolioManager:
             else:
                 effective_price = price
 
-            if portfolio_key not in portfolio:
-                portfolio[portfolio_key] = PortfolioItem(scrip, 0, 0.0, 0.0, category)
+            # Initialize lot list if not exists
+            if portfolio_key not in purchase_lots:
+                purchase_lots[portfolio_key] = []
+                short_positions[portfolio_key] = 0
 
-            if trans_type == 'BUY':
-                # For BUY transactions, handle both regular buys and covering short positions
-                current_quantity = portfolio[portfolio_key].quantity
-                current_avg_price = portfolio[portfolio_key].average_price
-                
-                if current_quantity == 0:
-                    # This is a regular buy into empty position
-                    portfolio[portfolio_key].quantity = quantity
-                    portfolio[portfolio_key].average_price = effective_price
-                elif current_quantity > 0:
-                    # This is adding to an existing long position
-                    current_total = current_quantity * current_avg_price
-                    new_total = quantity * effective_price
-                    new_quantity = current_quantity + quantity
+            # Process different transaction types
+            if trans_type in ['BUY', 'IPO', 'RIGHT', 'DEMERGER']:
+                # These transactions add shares to portfolio
+                if short_positions[portfolio_key] < 0:
+                    # Cover short position first
+                    short_cover = min(quantity, abs(short_positions[portfolio_key]))
+                    short_positions[portfolio_key] += short_cover
+                    remaining_quantity = quantity - short_cover
                     
-                    portfolio[portfolio_key].average_price = (current_total + new_total) / new_quantity
-                    portfolio[portfolio_key].quantity = new_quantity
+                    if remaining_quantity > 0:
+                        # Add remaining quantity as new lot
+                        purchase_lots[portfolio_key].append(
+                            PurchaseLot(date, remaining_quantity, effective_price, trans_type)
+                        )
                 else:
-                    # This is covering a short position (current_quantity < 0)
-                    new_quantity = current_quantity + quantity
-                    
-                    if new_quantity == 0:
-                        # Short position completely closed
-                        portfolio[portfolio_key].quantity = 0
-                        # Keep the average price as is for record keeping
-                    elif new_quantity < 0:
-                        # Still short after partial cover
-                        portfolio[portfolio_key].quantity = new_quantity
-                        # Average price remains the same (original short price)
-                    else:
-                        # Overcovered - now long position
-                        remaining_buy_quantity = new_quantity
-                        portfolio[portfolio_key].quantity = remaining_buy_quantity
-                        portfolio[portfolio_key].average_price = effective_price
-
-            elif trans_type in ['SELL', 'BUYBACK']:
-                # For SELL and BUYBACK transactions, handle both regular sells and short sells
-                current_quantity = portfolio[portfolio_key].quantity
-                current_avg_price = portfolio[portfolio_key].average_price
-                
-                if current_quantity == 0:
-                    # This is a short sell (selling before buying)
-                    portfolio[portfolio_key].quantity = -quantity
-                    portfolio[portfolio_key].average_price = effective_price
-                elif current_quantity > 0:
-                    # This is a regular sell from existing position
-                    portfolio[portfolio_key].quantity -= quantity
-                    # Average price remains the same for regular sells
-                else:
-                    # This is adding to an existing short position
-                    current_total = current_quantity * current_avg_price
-                    new_total = -quantity * effective_price
-                    new_quantity = current_quantity - quantity
-                    
-                    if new_quantity != 0:
-                        portfolio[portfolio_key].average_price = (current_total + new_total) / new_quantity
-                    portfolio[portfolio_key].quantity = new_quantity
+                    # Add as new purchase lot
+                    purchase_lots[portfolio_key].append(
+                        PurchaseLot(date, quantity, effective_price, trans_type)
+                    )
 
             elif trans_type == 'BONUS':
-                # For BONUS transactions, add quantity and recalculate average price
-                current_total = portfolio[portfolio_key].quantity * portfolio[portfolio_key].average_price
-                new_quantity = portfolio[portfolio_key].quantity + quantity
-                # Since bonus shares are issued at zero cost, the average price should be reduced
-                if new_quantity != 0:  # Avoid division by zero
-                    portfolio[portfolio_key].average_price = current_total / new_quantity
-                portfolio[portfolio_key].quantity = new_quantity
-
-            elif trans_type == 'IPO':
-                # For IPO transactions, add shares to portfolio similar to BUY transactions
-                current_quantity = portfolio[portfolio_key].quantity
-                current_avg_price = portfolio[portfolio_key].average_price
-                
-                if current_quantity == 0:
-                    # This is a new IPO allocation
-                    portfolio[portfolio_key].quantity = quantity
-                    portfolio[portfolio_key].average_price = effective_price
-                elif current_quantity > 0:
-                    # This is additional IPO allocation to existing position
-                    current_total = current_quantity * current_avg_price
-                    new_total = quantity * effective_price
-                    new_quantity = current_quantity + quantity
-                    
-                    portfolio[portfolio_key].average_price = (current_total + new_total) / new_quantity
-                    portfolio[portfolio_key].quantity = new_quantity
+                # Bonus shares are free - add to existing lots proportionally
+                if purchase_lots[portfolio_key]:
+                    total_existing_qty = sum(lot.quantity for lot in purchase_lots[portfolio_key])
+                    if total_existing_qty > 0:
+                        # Add bonus shares proportionally to existing lots
+                        for lot in purchase_lots[portfolio_key]:
+                            bonus_for_lot = int((lot.quantity / total_existing_qty) * quantity)
+                            if bonus_for_lot > 0:
+                                # Create new lot for bonus shares at zero cost
+                                purchase_lots[portfolio_key].append(
+                                    PurchaseLot(date, bonus_for_lot, 0.0, trans_type)
+                                )
                 else:
-                    # This is IPO allocation covering a short position (rare case)
-                    new_quantity = current_quantity + quantity
-                    
-                    if new_quantity == 0:
-                        # Short position completely closed by IPO allocation
-                        portfolio[portfolio_key].quantity = 0
-                        # Keep the average price as is for record keeping
-                    elif new_quantity < 0:
-                        # Still short after partial IPO allocation
-                        portfolio[portfolio_key].quantity = new_quantity
-                        # Average price remains the same (original short price)
-                    else:
-                        # IPO allocation exceeds short position - now long position
-                        remaining_quantity = new_quantity
-                        portfolio[portfolio_key].quantity = remaining_quantity
-                        portfolio[portfolio_key].average_price = effective_price
+                    # No existing lots, add as new lot at zero cost
+                    purchase_lots[portfolio_key].append(
+                        PurchaseLot(date, quantity, 0.0, trans_type)
+                    )
 
-            elif trans_type == 'RIGHT':
-                # For RIGHT transactions, add shares to portfolio similar to BUY transactions
-                current_quantity = portfolio[portfolio_key].quantity
-                current_avg_price = portfolio[portfolio_key].average_price
-                
-                if current_quantity == 0:
-                    # This is a new RIGHT subscription
-                    portfolio[portfolio_key].quantity = quantity
-                    portfolio[portfolio_key].average_price = effective_price
-                elif current_quantity > 0:
-                    # This is additional RIGHT subscription to existing position
-                    current_total = current_quantity * current_avg_price
-                    new_total = quantity * effective_price
-                    new_quantity = current_quantity + quantity
-                    
-                    portfolio[portfolio_key].average_price = (current_total + new_total) / new_quantity
-                    portfolio[portfolio_key].quantity = new_quantity
+            elif trans_type in ['SELL', 'BUYBACK']:
+                # These transactions reduce shares from portfolio (FIFO)
+                if not purchase_lots[portfolio_key] or sum(lot.quantity for lot in purchase_lots[portfolio_key]) == 0:
+                    # No existing lots - this is a short sell
+                    short_positions[portfolio_key] -= quantity
                 else:
-                    # This is RIGHT subscription covering a short position (rare case)
-                    new_quantity = current_quantity + quantity
+                    # Sell from existing lots (FIFO)
+                    remaining_to_sell = quantity
+                    lots_to_remove = []
                     
-                    if new_quantity == 0:
-                        # Short position completely closed by RIGHT subscription
-                        portfolio[portfolio_key].quantity = 0
-                        # Keep the average price as is for record keeping
-                    elif new_quantity < 0:
-                        # Still short after partial RIGHT subscription
-                        portfolio[portfolio_key].quantity = new_quantity
-                        # Average price remains the same (original short price)
-                    else:
-                        # RIGHT subscription exceeds short position - now long position
-                        remaining_quantity = new_quantity
-                        portfolio[portfolio_key].quantity = remaining_quantity
-                        portfolio[portfolio_key].average_price = effective_price
-
-            elif trans_type == 'DEMERGER':
-                # For DEMERGER transactions, add shares to portfolio similar to BUY transactions
-                current_quantity = portfolio[portfolio_key].quantity
-                current_avg_price = portfolio[portfolio_key].average_price
-                
-                if current_quantity == 0:
-                    # This is a new DEMERGER allocation
-                    portfolio[portfolio_key].quantity = quantity
-                    portfolio[portfolio_key].average_price = effective_price
-                elif current_quantity > 0:
-                    # This is additional DEMERGER allocation to existing position
-                    current_total = current_quantity * current_avg_price
-                    new_total = quantity * effective_price
-                    new_quantity = current_quantity + quantity
+                    for i, lot in enumerate(purchase_lots[portfolio_key]):
+                        if remaining_to_sell <= 0:
+                            break
+                            
+                        if lot.quantity <= remaining_to_sell:
+                            # Sell entire lot
+                            remaining_to_sell -= lot.quantity
+                            lots_to_remove.append(i)
+                        else:
+                            # Sell partial lot
+                            lot.quantity -= remaining_to_sell
+                            remaining_to_sell = 0
                     
-                    portfolio[portfolio_key].average_price = (current_total + new_total) / new_quantity
-                    portfolio[portfolio_key].quantity = new_quantity
-                else:
-                    # This is DEMERGER allocation covering a short position (rare case)
-                    new_quantity = current_quantity + quantity
+                    # Remove sold lots (in reverse order to maintain indices)
+                    for i in reversed(lots_to_remove):
+                        purchase_lots[portfolio_key].pop(i)
                     
-                    if new_quantity == 0:
-                        # Short position completely closed by DEMERGER allocation
-                        portfolio[portfolio_key].quantity = 0
-                        # Keep the average price as is for record keeping
-                    elif new_quantity < 0:
-                        # Still short after partial DEMERGER allocation
-                        portfolio[portfolio_key].quantity = new_quantity
-                        # Average price remains the same (original short price)
-                    else:
-                        # DEMERGER allocation exceeds short position - now long position
-                        remaining_quantity = new_quantity
-                        portfolio[portfolio_key].quantity = remaining_quantity
-                        portfolio[portfolio_key].average_price = effective_price
+                    # If still have remaining to sell, it becomes a short position
+                    if remaining_to_sell > 0:
+                        short_positions[portfolio_key] -= remaining_to_sell
 
             elif trans_type == 'MERGER & ACQUISITION':
-                # For mergers, we need to handle both old and new shares
+                # Handle merger - remove old scrip and add new scrip
                 old_scrip = row.get('old_scrip_name')
                 if old_scrip:
-                    # Remove old shares from portfolio using the same category
                     old_portfolio_key = f"{old_scrip}_{category}"
-                    if old_portfolio_key in portfolio:
-                        portfolio[old_portfolio_key].quantity = 0  # Set to 0 to remove from final list
+                    if old_portfolio_key in purchase_lots:
+                        purchase_lots[old_portfolio_key] = []
+                        short_positions[old_portfolio_key] = 0
                 
-                # Add new shares with the effective rate
-                current_total = portfolio[portfolio_key].quantity * portfolio[portfolio_key].average_price
-                new_total = quantity * effective_price  # price here is the effective rate
-                new_quantity = portfolio[portfolio_key].quantity + quantity
+                # Add new shares
+                purchase_lots[portfolio_key].append(
+                    PurchaseLot(date, quantity, effective_price, trans_type)
+                )
+
+        # Convert to PortfolioItem objects
+        portfolio_items = []
+        for portfolio_key, lots in purchase_lots.items():
+            if not lots and short_positions[portfolio_key] == 0:
+                continue
                 
-                if new_quantity != 0:  # Avoid division by zero
-                    portfolio[portfolio_key].average_price = (current_total + new_total) / new_quantity
-                portfolio[portfolio_key].quantity = new_quantity
+            scrip_name = portfolio_key.split('_')[0]
+            category = '_'.join(portfolio_key.split('_')[1:])
+            
+            # Calculate portfolio values
+            total_quantity = sum(lot.quantity for lot in lots) + short_positions[portfolio_key]
+            
+            if total_quantity != 0:
+                if lots:
+                    # Calculate weighted average price from remaining lots
+                    total_value = sum(lot.quantity * lot.price for lot in lots)
+                    total_lot_quantity = sum(lot.quantity for lot in lots)
+                    
+                    if total_lot_quantity > 0:
+                        avg_price = total_value / total_lot_quantity
+                    else:
+                        avg_price = 0.0
+                else:
+                    # Only short position exists
+                    avg_price = 0.0
+                    total_value = 0.0
+                
+                if total_quantity > 0:
+                    # Long position
+                    portfolio_items.append(PortfolioItem(
+                        scrip_name=scrip_name,
+                        quantity=int(total_quantity),
+                        average_price=avg_price,
+                        total_value=total_quantity * avg_price,
+                        transaction_category=category.replace('_', ' ')
+                    ))
+                else:
+                    # Short position
+                    portfolio_items.append(PortfolioItem(
+                        scrip_name=scrip_name,
+                        quantity=int(total_quantity),
+                        average_price=avg_price,
+                        total_value=total_quantity * avg_price,
+                        transaction_category=category.replace('_', ' ')
+                    ))
 
-            # Update total value
-            portfolio[portfolio_key].total_value = portfolio[portfolio_key].quantity * portfolio[portfolio_key].average_price
-
-        # Return all items with non-zero quantity (including negative quantities for short positions)
-        return [item for item in portfolio.values() if item.quantity != 0]
+        return portfolio_items

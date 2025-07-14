@@ -1,29 +1,68 @@
 import streamlit as st
 from models.portfolio import PortfolioManager
 import pandas as pd
+import sys
+import math
 
 class PortfolioView:
     def __init__(self, portfolio_manager: PortfolioManager):
         self.portfolio_manager = portfolio_manager
+
+    def _safe_quantity(self, quantity: int) -> int:
+        """Safely handle large quantities that might cause overflow in PyArrow conversion."""
+        # C long limits (typically -2^63 to 2^63-1 on 64-bit systems)
+        max_safe_value = 2**53  # Use a more conservative limit for safety
+        min_safe_value = -2**53
+        
+        if quantity > max_safe_value:
+            return max_safe_value
+        elif quantity < min_safe_value:
+            return min_safe_value
+        else:
+            return quantity
+
+    def _is_finite_safe(self, value) -> bool:
+        """Safely check if a value is finite, handling overflow errors for large values."""
+        try:
+            return math.isfinite(value)
+        except (OverflowError, ValueError):
+            # Value too large to convert to float, treat as not finite
+            return False
 
     def render(self, demat_account_id: int):
         st.title("Current Portfolio")
         portfolio_items = self.portfolio_manager.calculate_portfolio(demat_account_id)
 
         if portfolio_items:
-            total_portfolio_value = sum(item.total_value for item in portfolio_items)
+            # Calculate total portfolio value with overflow protection
+            try:
+                total_portfolio_value = sum(item.total_value for item in portfolio_items)
+                # Check if the total value is finite
+                if not (self._is_finite_safe(total_portfolio_value) and -10**15 <= total_portfolio_value <= 10**15):
+                    st.warning("⚠️ Total portfolio value is extremely large and may not be accurate. Please review your transaction data.")
+                    total_portfolio_value = 0  # Reset to 0 for display
+            except (OverflowError, ValueError):
+                st.error("❌ Cannot calculate total portfolio value due to extremely large numbers in the data.")
+                total_portfolio_value = 0
+            
             st.metric("Total Portfolio Value", f"₹{total_portfolio_value:,.2f}")
 
             # Create a DataFrame for better display
+            has_large_quantities = any(abs(item.quantity) > 2**53 for item in portfolio_items)
+            
             portfolio_df = pd.DataFrame([
                 {
                     "Scrip": item.scrip_name,
                     "Category": item.transaction_category,
-                    "Quantity": item.quantity,
+                    "Quantity": self._safe_quantity(item.quantity),
                     "Average Price": f"₹{item.average_price:.2f}",
                     "Total Value": f"₹{item.total_value:,.2f}"
                 } for item in portfolio_items
             ])
+            
+            # Show warning if quantities were capped
+            if has_large_quantities:
+                st.warning("⚠️ Some quantities are extremely large and have been capped for display purposes. Please review your transaction data for potential data entry errors.")
 
             # Add filters in columns
             col1, col2 = st.columns(2)

@@ -126,7 +126,7 @@ class PortfolioManager:
                 if purchase_lots[portfolio_key]:
                     total_existing_qty = sum(lot.quantity for lot in purchase_lots[portfolio_key])
                     if total_existing_qty > 0:
-                        # Add bonus shares proportionally to existing lots
+                        # Add bonus shares proportionally to existing lots (modify existing lots)
                         for lot in purchase_lots[portfolio_key]:
                             # Check for infinity values before calculation
                             if not self._is_finite_safe(lot.quantity) or not self._is_finite_safe(total_existing_qty) or not self._is_finite_safe(quantity):
@@ -136,10 +136,8 @@ class PortfolioManager:
                             if self._is_finite_safe(bonus_calculation):
                                 bonus_for_lot = int(bonus_calculation)
                                 if bonus_for_lot > 0:
-                                    # Create new lot for bonus shares at zero cost
-                                    purchase_lots[portfolio_key].append(
-                                        PurchaseLot(date, bonus_for_lot, 0.0, trans_type)
-                                    )
+                                    # Add bonus shares to existing lot (don't create new lot)
+                                    lot.quantity += bonus_for_lot
                 else:
                     # No existing lots, add as new lot at zero cost (if quantity is finite)
                     if self._is_finite_safe(quantity):
